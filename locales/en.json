@@ -1,0 +1,173 @@
+{
+  "meta": {
+    "locale": "en",
+    "name": "English"
+  },
+  "nav": {
+    "home": "Home",
+    "catalog": "Products",
+    "cart": "Cart",
+    "checkOrder": "Track Order",
+    "about": "About Us",
+    "contact": "Contact",
+    "locations": "Store Location"
+  },
+  "header": {
+    "announceDelivery": "Next-day delivery in Medan & surroundings",
+    "announceWa": "Stock & shipping confirmed via WhatsApp"
+  },
+  "common": {
+    "brand": "Rasa Medan",
+    "tagline": "Medan Specialty Souvenirs",
+    "chatWa": "Chat via WhatsApp",
+    "search": "Search products...",
+    "addToCart": "Add to Cart",
+    "checkout": "Checkout",
+    "askStockWA": "Ask Stock via WhatsApp",
+    "orderViaWA": "Order via WhatsApp",
+    "viewAllProducts": "View all products",
+    "halal": "Halal",
+    "price": "Price",
+    "quantity": "Quantity",
+    "subtotal": "Subtotal",
+    "weightEstimate": "Estimated weight",
+    "description": "Description",
+    "ingredients": "Ingredients",
+    "chooseVariant": "Choose variant"
+  },
+  "home": {
+    "heroEyebrow": "Straight from our hometown",
+    "heroTitle": "Authentic Taste of Medan,",
+    "heroTitleAccent": "Delivered to Your Home.",
+    "heroSubtitle": "Explore cakes, snacks, syrups, and Medan specialty souvenirs. Order easily via WhatsApp.",
+    "heroCtaProducts": "View Products",
+    "categoriesTitle": "Categories",
+    "featuredTitle": "Best Sellers",
+    "waGreeting": "Hello, I'd like to ask about Rasa Medan products."
+  },
+  "catalog": {
+    "title": "All Products",
+    "empty": "No products match your search."
+  },
+  "detail": {
+    "back": "Back to catalog",
+    "addedToCart": "Added to cart",
+    "viewCart": "View Cart"
+  },
+  "cart": {
+    "title": "Cart",
+    "empty": "Your cart is still empty.",
+    "emptyCta": "Browse products",
+    "remove": "Remove item",
+    "increase": "Increase quantity",
+    "decrease": "Decrease quantity",
+    "shippingNote": "Shipping not included — calculated by the owner via WhatsApp (except self pickup)."
+  },
+  "checkout": {
+    "title": "Checkout",
+    "method": "Fulfillment method",
+    "method_kurir": "Courier delivery",
+    "method_pickup": "Self pickup",
+    "name": "Full name",
+    "phone": "Phone number (WhatsApp)",
+    "address": "Full address",
+    "city": "District / City",
+    "locationNote": "Location note (landmark)",
+    "note": "Order note",
+    "pickupNote": "Estimated pickup time (optional)",
+    "orderSummary": "Order summary",
+    "placeOrder": "Place Order & Continue to WhatsApp",
+    "processing": "Processing...",
+    "errRequired": "Name and phone number are required.",
+    "errAddress": "Address and district/city are required for courier delivery.",
+    "errGeneric": "Something went wrong. Please try again.",
+    "successTitle": "Order created!",
+    "successMsg": "We're opening WhatsApp so you can send your order to the owner. Save your Order ID to track status.",
+    "orderId": "Order ID",
+    "continueWa": "Continue to WhatsApp",
+    "checkStatus": "Track order status"
+  },
+  "whatsapp": {
+    "askStock": "Hello, I'd like to ask about stock availability for:"
+  },
+  "checkOrder": {
+    "title": "Track Order Status",
+    "subtitle": "Enter the phone number you used when ordering. Order ID is optional to narrow the search.",
+    "phone": "Phone number",
+    "code": "Order ID (optional)",
+    "search": "Track Order",
+    "searching": "Searching...",
+    "noResults": "No orders found for that information.",
+    "errPhone": "Phone number is required.",
+    "errCaptcha": "Please complete the reCAPTCHA first.",
+    "errGeneric": "Something went wrong. Please try again."
+  },
+  "categories": {
+    "all": "All",
+    "kue": "Cakes",
+    "kering": "Dry Snacks",
+    "sirup": "Syrups"
+  },
+  "stock": {
+    "tersedia": "Available",
+    "terbatas": "Limited",
+    "pre-order": "Pre-order",
+    "tanya-stok": "Ask Stock"
+  },
+  "banner": {
+    "shipping": "Orders packed within 1 day · self pickup available"
+  },
+  "trust": {
+    "halalTitle": "Halal & BPOM/PIRT",
+    "halalDesc": "Products are certified halal and safe to consume",
+    "noLoginTitle": "Order Without Login",
+    "noLoginDesc": "Easy shopping with no account required",
+    "waTitle": "WhatsApp Confirmation",
+    "waDesc": "Stock & shipping confirmed manually by the owner",
+    "nextDayTitle": "Next-Day Delivery",
+    "nextDayDesc": "Shipped after payment is confirmed",
+    "secureTitle": "Secure Transactions",
+    "secureDesc": "Payment via QR/bank transfer after confirmation"
+  },
+  "location": {
+    "title": "Our Store Location",
+    "openMaps": "Open in Google Maps"
+  },
+  "footer": {
+    "hoursTitle": "Operating Hours",
+    "followTitle": "Follow Us",
+    "waOrderLabel": "Orders",
+    "waCsLabel": "Customer Service"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "message": "Sorry, the page or product you're looking for isn't available.",
+    "backHome": "Back to home"
+  },
+  "support": {
+    "aboutTitle": "About Us",
+    "contactTitle": "Contact",
+    "whatsappLabel": "Order WhatsApp",
+    "whatsappNote": "This number is dedicated to product orders.",
+    "csWaLabel": "Customer Service WhatsApp",
+    "csWaNote": "For general questions, product info, and assistance.",
+    "csGreeting": "Hello, I'd like to ask about the Rasa Medan store.",
+    "addressLabel": "Store Address",
+    "pickupLabel": "Self Pickup",
+    "emailLabel": "Email",
+    "hoursLabel": "Operating Hours",
+    "shippingTitle": "Shipping Policy",
+    "waGreeting": "Hello, I'd like to ask about Rasa Medan products."
+  },
+  "orderStatus": {
+    "Menunggu Konfirmasi": "Awaiting Confirmation",
+    "Stok Dikonfirmasi": "Stock Confirmed",
+    "Menunggu Pembayaran": "Awaiting Payment",
+    "Pembayaran Diverifikasi": "Payment Verified",
+    "Dikemas": "Packing",
+    "Dikirim": "Shipped",
+    "Siap Diambil": "Ready for Pickup",
+    "Selesai": "Completed",
+    "Dibatalkan": "Cancelled"
+  }
+}

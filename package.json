@@ -1,0 +1,31 @@
+{
+  "name": "rasa-medan",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Website katalog oleh-oleh khas Medan (MVP) - Rasa Medan",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:test": "node --env-file=.env scripts/test-db.mjs",
+    "db:schema": "node --env-file=.env scripts/apply-schema.mjs",
+    "db:migrate": "node --env-file=.env scripts/migrate-add-weight.mjs",
+    "db:repair": "node --env-file=.env scripts/repair-order-items.mjs",
+    "seed": "node --env-file=.env scripts/seed.mjs",
+    "seed:categories": "node --env-file=.env scripts/seed-categories.mjs",
+    "seed:admin": "node --env-file=.env scripts/seed-admin.mjs"
+  },
+  "dependencies": {
+    "mysql2": "^3.11.5",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "typescript": "^5.7.3"
+  }
+}

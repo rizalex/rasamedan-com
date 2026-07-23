@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev.log`\" 2>&1\")",
+      "PowerShell(Get-Process *)",
+      "PowerShell(node --env-file=.env \"$env:CLAUDE_JOB_DIR\\\\tmp\\\\probe.mjs\")",
+      "PowerShell(node --env-file=.env _probe.mjs)",
+      "PowerShell(npm run *)",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev3.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev4.log`\" 2>&1\")",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev5.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev6.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev7.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev8.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev9.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev10.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"npx next dev > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\dev11.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"npx next start -p 3100 > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\prod.log`\" 2>&1\")",
+      "PowerShell(cmd /c \"set PORT=3200&& set NODE_ENV=production&& node server.js > `\"$env:CLAUDE_JOB_DIR\\\\tmp\\\\srv.log`\" 2>&1\")",
+      "PowerShell($env:PORT=3100; Start-Process -FilePath \"node\" -ArgumentList \"node_modules/next/dist/bin/next\",\"start\",\"-p\",\"3100\" -WindowStyle Hidden; Start-Sleep -Seconds 4; try { \\(Invoke-WebRequest -UseBasicParsing http://localhost:3100/ -TimeoutSec 10\\).StatusCode } catch { $_.Exception.Message })",
+      "PowerShell(Out-File *)"
+    ]
+  }
+}

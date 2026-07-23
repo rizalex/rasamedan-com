@@ -1,0 +1,173 @@
+{
+  "meta": {
+    "locale": "id",
+    "name": "Bahasa Indonesia"
+  },
+  "nav": {
+    "home": "Beranda",
+    "catalog": "Produk",
+    "cart": "Keranjang",
+    "checkOrder": "Cek Pesanan",
+    "about": "Tentang Kami",
+    "contact": "Kontak",
+    "locations": "Lokasi Toko"
+  },
+  "header": {
+    "announceDelivery": "Pengiriman next-day di Medan & sekitarnya",
+    "announceWa": "Konfirmasi stok & ongkir via WhatsApp"
+  },
+  "common": {
+    "brand": "Rasa Medan",
+    "tagline": "Oleh-oleh Khas Medan",
+    "chatWa": "Chat via WhatsApp",
+    "search": "Cari produk...",
+    "addToCart": "Tambah ke Keranjang",
+    "checkout": "Checkout",
+    "askStockWA": "Tanya Stok via WhatsApp",
+    "orderViaWA": "Pesan via WhatsApp",
+    "viewAllProducts": "Lihat semua produk",
+    "halal": "Halal",
+    "price": "Harga",
+    "quantity": "Jumlah",
+    "subtotal": "Subtotal",
+    "weightEstimate": "Perkiraan berat",
+    "description": "Deskripsi",
+    "ingredients": "Bahan-bahan",
+    "chooseVariant": "Pilih varian"
+  },
+  "home": {
+    "heroEyebrow": "Asli dari kampung halaman",
+    "heroTitle": "Rasa Asli Medan,",
+    "heroTitleAccent": "Langsung ke Rumah Anda.",
+    "heroSubtitle": "Jelajahi kue, camilan, sirup, dan oleh-oleh khas Medan. Pesan mudah lewat WhatsApp.",
+    "heroCtaProducts": "Lihat Produk",
+    "categoriesTitle": "Kategori",
+    "featuredTitle": "Produk Terlaris",
+    "waGreeting": "Halo, saya ingin bertanya tentang produk Rasa Medan."
+  },
+  "catalog": {
+    "title": "Semua Produk",
+    "empty": "Tidak ada produk yang cocok dengan pencarian Anda."
+  },
+  "detail": {
+    "back": "Kembali ke katalog",
+    "addedToCart": "Ditambahkan ke keranjang",
+    "viewCart": "Lihat Keranjang"
+  },
+  "cart": {
+    "title": "Keranjang",
+    "empty": "Keranjang Anda masih kosong.",
+    "emptyCta": "Lihat produk",
+    "remove": "Hapus item",
+    "increase": "Tambah jumlah",
+    "decrease": "Kurangi jumlah",
+    "shippingNote": "Ongkir belum termasuk — dihitung pemilik via WhatsApp (kecuali ambil sendiri)."
+  },
+  "checkout": {
+    "title": "Checkout",
+    "method": "Metode pengambilan",
+    "method_kurir": "Dikirim kurir",
+    "method_pickup": "Ambil sendiri",
+    "name": "Nama lengkap",
+    "phone": "Nomor HP (WhatsApp)",
+    "address": "Alamat lengkap",
+    "city": "Kecamatan / Kota",
+    "locationNote": "Catatan lokasi (patokan)",
+    "note": "Catatan pesanan",
+    "pickupNote": "Estimasi waktu ambil (opsional)",
+    "orderSummary": "Ringkasan pesanan",
+    "placeOrder": "Buat Pesanan & Lanjut ke WhatsApp",
+    "processing": "Memproses...",
+    "errRequired": "Nama dan nomor HP wajib diisi.",
+    "errAddress": "Alamat dan kecamatan/kota wajib diisi untuk pengiriman kurir.",
+    "errGeneric": "Terjadi kesalahan. Silakan coba lagi.",
+    "successTitle": "Pesanan dibuat!",
+    "successMsg": "Kami membuka WhatsApp agar Anda bisa mengirim pesanan ke pemilik. Simpan Order ID untuk cek status.",
+    "orderId": "Order ID",
+    "continueWa": "Lanjutkan ke WhatsApp",
+    "checkStatus": "Cek status pesanan"
+  },
+  "whatsapp": {
+    "askStock": "Halo, saya ingin menanyakan ketersediaan stok untuk produk:"
+  },
+  "checkOrder": {
+    "title": "Cek Status Pesanan",
+    "subtitle": "Masukkan nomor HP yang Anda pakai saat memesan. Order ID opsional untuk mempersempit pencarian.",
+    "phone": "Nomor HP",
+    "code": "Order ID (opsional)",
+    "search": "Cek Pesanan",
+    "searching": "Mencari...",
+    "noResults": "Tidak ada pesanan ditemukan untuk data tersebut.",
+    "errPhone": "Nomor HP wajib diisi.",
+    "errCaptcha": "Mohon centang reCAPTCHA terlebih dahulu.",
+    "errGeneric": "Terjadi kesalahan. Silakan coba lagi."
+  },
+  "categories": {
+    "all": "Semua",
+    "kue": "Kue",
+    "kering": "Kering",
+    "sirup": "Sirup"
+  },
+  "stock": {
+    "tersedia": "Tersedia",
+    "terbatas": "Terbatas",
+    "pre-order": "Pre-order",
+    "tanya-stok": "Tanyakan Stok"
+  },
+  "banner": {
+    "shipping": "Pengiriman dikemas H+1 · tersedia ambil sendiri"
+  },
+  "trust": {
+    "halalTitle": "Halal & BPOM/PIRT",
+    "halalDesc": "Produk terjamin halal dan aman dikonsumsi",
+    "noLoginTitle": "Pesan Tanpa Login",
+    "noLoginDesc": "Belanja mudah tanpa perlu daftar akun",
+    "waTitle": "Konfirmasi via WhatsApp",
+    "waDesc": "Stok & ongkir dikonfirmasi manual oleh owner",
+    "nextDayTitle": "Pengiriman Next-Day",
+    "nextDayDesc": "Dikirim setelah pembayaran dikonfirmasi",
+    "secureTitle": "Transaksi Aman",
+    "secureDesc": "Pembayaran via QR/bank transfer setelah konfirmasi"
+  },
+  "location": {
+    "title": "Lokasi Toko Kami",
+    "openMaps": "Buka di Google Maps"
+  },
+  "footer": {
+    "hoursTitle": "Jam Operasional",
+    "followTitle": "Ikuti Kami",
+    "waOrderLabel": "Pemesanan",
+    "waCsLabel": "Layanan Pelanggan"
+  },
+  "notFound": {
+    "title": "Halaman tidak ditemukan",
+    "message": "Maaf, halaman atau produk yang Anda cari tidak tersedia.",
+    "backHome": "Kembali ke beranda"
+  },
+  "support": {
+    "aboutTitle": "Tentang Kami",
+    "contactTitle": "Kontak",
+    "whatsappLabel": "WhatsApp Pemesanan",
+    "whatsappNote": "Nomor ini khusus untuk pemesanan produk.",
+    "csWaLabel": "WhatsApp Layanan Pelanggan",
+    "csWaNote": "Untuk pertanyaan umum, info produk, dan bantuan.",
+    "csGreeting": "Halo, saya ingin bertanya seputar toko Rasa Medan.",
+    "addressLabel": "Alamat Toko",
+    "pickupLabel": "Ambil Sendiri",
+    "emailLabel": "Email",
+    "hoursLabel": "Jam Operasional",
+    "shippingTitle": "Kebijakan Pengiriman",
+    "waGreeting": "Halo, saya ingin bertanya tentang produk Rasa Medan."
+  },
+  "orderStatus": {
+    "Menunggu Konfirmasi": "Menunggu Konfirmasi",
+    "Stok Dikonfirmasi": "Stok Dikonfirmasi",
+    "Menunggu Pembayaran": "Menunggu Pembayaran",
+    "Pembayaran Diverifikasi": "Pembayaran Diverifikasi",
+    "Dikemas": "Dikemas",
+    "Dikirim": "Dikirim",
+    "Siap Diambil": "Siap Diambil",
+    "Selesai": "Selesai",
+    "Dibatalkan": "Dibatalkan"
+  }
+}

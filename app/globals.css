@@ -1,0 +1,68 @@
+/* ===========================================================================
+   Rasa Medan - Global styles & tema visual
+   Palet redesign (Skill 17): hijau tua + emas + krem. Merah marun DIHAPUS.
+   =========================================================================== */
+
+:root {
+  /* Palet utama */
+  --color-primary: #14432E;   /* Hijau Tua - warna utama/CTA & brand */
+  --color-secondary: #1E5631; /* Hijau (aksen sekunder lebih terang) */
+  --color-accent: #D4AF37;    /* Emas/Kuning Keemasan - aksen mewah */
+  --color-accent-dark: #B8912A; /* Emas gelap (hover) */
+  --color-bg: #FFF8F0;        /* Krem/Putih Gading - latar */
+  --color-text: #2B2B2B;
+
+  /* Turunan warna untuk UI */
+  --color-primary-dark: #0F3323; /* Hijau paling gelap (top bar/sidebar) */
+  --color-primary-soft: #eaf1ec; /* Hijau sangat muda (latar lembut) */
+  --color-muted: #5F5E5A;
+  --color-border: #e6ded0;
+  --color-surface: #ffffff;
+
+  /* Badge status stok (PRD 3.2) */
+  --stock-available-bg: #e0f0e6;
+  --stock-available-fg: #1E5631;
+  --stock-limited-bg: #faf0d8;
+  --stock-limited-fg: #854F0B;
+  --stock-preorder-bg: #e2ecf7;
+  --stock-preorder-fg: #1f4e79;
+  --stock-ask-bg: #eeeeee;
+  --stock-ask-fg: #555555;
+
+  --radius: 12px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}

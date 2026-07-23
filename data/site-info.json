@@ -1,0 +1,28 @@
+{
+  "_comment": "Konten halaman Tentang & Kontak. Edit file ini untuk mengubah isi halaman tanpa menyentuh kode. Nomor WhatsApp diambil dari .env — NEXT_PUBLIC_WA_NUMBER (utama/pemesanan) & NEXT_PUBLIC_WA_NUMBER_ALT (layanan pelanggan) — bukan dari sini.",
+  "storeName": "Rasa Medan",
+  "about": {
+    "tagline": "Oleh-oleh khas Medan, dibuat dengan hati.",
+    "paragraphs": [
+      "Rasa Medan adalah usaha keluarga yang menjual oleh-oleh seperti kue, makanan kering, dan sirup khas Sumatera Utara. Berawal dari dagang kecil-kecilan, kami ingin membawa cita rasa kampung halaman ke meja keluarga Anda di mana pun berada.",
+      "Setiap produk dibuat segar menggunakan bahan pilihan dan resep turun-temurun. Mulai dari Kue Gulung, Bika Ambon, Kacang Sihobuk yang gurih, hingga Sirup Markisa yang segar — semuanya kami siapkan dengan standar kebersihan dan kualitas terbaik.",
+      "Kami percaya belanja oleh-oleh harus mudah dan personal. Karena itu Anda bisa memesan tanpa perlu membuat akun, dan setiap pesanan kami konfirmasi langsung lewat WhatsApp."
+    ]
+  },
+  "contact": {
+    "address": "Jl. Bandara Kuala Namu - Tj, Morawa (Sebelum Gate Bandara) Sumatera Utara 20552",
+    "pickupPoint": "Pengambilan sendiri dapat dilakukan di alamat toko pada jam operasional.",
+    "email": "halo@rasamedan",
+    "hours": [
+      { "days": "Kamis – Selasa", "time": "08.00 – 17.00 WIB" },
+      { "days": "Rabu", "time": "Tutup" }
+    ]
+  },
+  "shipping": {
+    "paragraphs": [
+      "Pesanan dikemas dan siap dikirim H+1 setelah pembayaran diverifikasi.",
+      "Ongkos kirim dihitung oleh pemilik sesuai alamat tujuan dan diinformasikan lewat WhatsApp sebelum pembayaran.",
+      "Tersedia opsi ambil sendiri (pickup) tanpa biaya kirim di alamat toko."
+    ]
+  }
+}

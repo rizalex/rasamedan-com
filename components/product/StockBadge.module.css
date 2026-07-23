@@ -1,0 +1,27 @@
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 8px;
+  line-height: 1.6;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.available {
+  background: var(--stock-available-bg);
+  color: var(--stock-available-fg);
+}
+.limited {
+  background: var(--stock-limited-bg);
+  color: var(--stock-limited-fg);
+}
+.preorder {
+  background: var(--stock-preorder-bg);
+  color: var(--stock-preorder-fg);
+}
+.ask {
+  background: var(--stock-ask-bg);
+  color: var(--stock-ask-fg);
+}
