@@ -1,9 +1,49 @@
-# SKILLS.md
-## Breakdown Modul Teknis untuk Claude Code
+# SKILLS.md — Rasa Medan
+## Modul Kerja untuk Claude Code (Skill 1–22)
 
-Dokumen ini memecah pembangunan aplikasi menjadi modul-modul kerja (skill) yang bisa dikerjakan satu per satu oleh agent. Kerjakan berurutan sesuai nomor — tiap modul punya checklist penerimaan (acceptance criteria).
+Satu-satunya daftar skill proyek ini. Per 12 Oktober 2026 file ini menggabungkan `SKILLS.md` lama (Skill 1–12) dan `SKILLS-ADDENDUM.md` (Skill 13–19), lalu menambahkan gerbang review (Skill 20–21) dan pelacakan pengiriman (Skill 22).
+
+- Requirement (sumber kebenaran): `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md`
+- Aturan teknis & bisnis untuk agent: `CLAUDE.md`
+- Deploy: `DEPLOYMENT.md`
+- Subagent: `.claude/agents/` → `architect`, `code-reviewer`, `security-auditor`
 
 ---
+
+## Alur Kerja Setiap Skill
+
+Kerjakan **satu skill per sesi** Claude Code, berurutan:
+
+1. **Rencana** — `Pakai subagent architect untuk merencanakan Skill N`. Wajib bila skill mengubah skema DB, API route, atau integrasi pihak ketiga; opsional untuk perubahan tampilan kecil.
+2. **Implementasi** — oleh sesi utama, mengikuti rencana.
+3. **Cek build** — `npx tsc --noEmit` dan `npm run build` harus lolos.
+4. **Code review** — Skill 20.1 (`code-reviewer`).
+5. **Security review** — Skill 21.1 (`security-auditor`), bila skill menyentuh login/sesi, API route, upload, captcha, form publik, environment variable, dependensi baru, atau layanan pihak ketiga.
+6. **Perbaiki** temuan Kritis/Penting/Tinggi, lalu ulangi langkah 4–5 sampai bersih.
+7. **Uji manual** sesuai Acceptance Criteria, lalu **commit** (satu commit per skill).
+8. **Perbarui tabel status** di bawah.
+
+---
+
+## Status Skill (hasil audit kode, 12 Okt 2026)
+
+| Skill | Topik | Status |
+|---|---|---|
+| 1–12 | MVP: setup & DB, dummy, beranda, katalog, detail, cart, checkout+WA, cek pesanan, admin, i18n, halaman pendukung, deploy | ✅ Selesai |
+| 13 | Berat produk & info ongkir manual | ⚠️ Berat produk jalan; berat per varian belum bisa diisi dari admin (backlog 20.4) |
+| 14 | Kategori dinamis | ✅ Selesai |
+| 15 | Captcha (Turnstile) & hardening login | ⚠️ Dokumen sudah Turnstile; kode di repo masih reCAPTCHA |
+| 16 | Pengaturan akun admin | ⚠️ Jalan; sesi di perangkat lain tidak ikut dicabut (Skill 21.2 no. 5) |
+| 17 | Redesign visual | ✅ Palet diterapkan; kesesuaian dengan mockup belum diverifikasi di browser |
+| 18 | Lokasi toko & info kontak | ✅ Selesai |
+| 19 | SEO & Google indexing | ⚠️ Kode selesai; gambar hero 9 MB menurunkan 19.6; 19.8 dikerjakan pemilik |
+| 20 | Code review (gerbang kualitas) | 🆕 Berulang setiap skill + backlog terbuka |
+| 21 | Security review & hardening | 🆕 Ada temuan terbuka, termasuk 1 Kritis |
+| 22 | Lacak pengiriman via api.co.id | 🆕 Rancangan; menunggu verifikasi 22.0 |
+
+---
+
+# BAGIAN A — MVP (Skill 1–12)
 
 ## Skill 1 — Setup Proyek & Database
 
@@ -36,7 +76,7 @@ Dokumen ini memecah pembangunan aplikasi menjadi modul-modul kerja (skill) yang 
 
 ## Skill 3 — Halaman Beranda
 
-- Hero section dengan warna tema (lihat `AGENTS.md` bagian 5).
+- Hero section dengan warna tema (lihat `CLAUDE.md` bagian 5).
 - Section highlight kategori (Kue/Kering/Sirup) dengan link ke katalog terfilter.
 - Banner info: estimasi kirim H+1 & opsi ambil sendiri tersedia.
 - Toggle bahasa di header (id/en).
@@ -154,3 +194,468 @@ Dokumen ini memecah pembangunan aplikasi menjadi modul-modul kerja (skill) yang 
 **Acceptance Criteria:**
 - [ ] Aplikasi bisa di-build dan dijalankan dengan `npm run build && npm start`
 - [ ] Tidak ada dependency yang butuh native binary sulit di-compile di shared hosting
+
+---
+
+# BAGIAN B — Pasca-MVP (Skill 13–19)
+
+## Skill 13 — Berat Produk & Info Ongkir Manual
+
+**Tujuan:** Pemilik bisa lihat total berat pesanan langsung dari pesan WhatsApp otomatis, tanpa perlu tanya balik ke pelanggan atau hitung manual dari daftar barang.
+
+**Perubahan Database:**
+```sql
+ALTER TABLE products ADD COLUMN weight_grams INT NOT NULL DEFAULT 0;
+```
+- Jika produk punya variasi dengan berat berbeda (misal ukuran botol beda), tambahkan kolom `weight_grams` di tabel `product_variants` juga, dan gunakan berat varian jika ada, fallback ke berat produk utama jika tidak.
+
+**Perubahan Admin:**
+- Tambahkan field "Berat (gram)" di form tambah/edit produk — wajib diisi, angka > 0.
+- Tampilkan kolom berat di tabel daftar produk admin agar mudah dicek/diedit massal.
+
+**Perubahan Checkout & WhatsApp:**
+- Saat generate pesan WhatsApp otomatis, hitung: `total_berat = Σ (berat_produk × qty)` untuk semua item di pesanan.
+- Tambahkan baris ini di template pesan WhatsApp, misal:
+  ```
+  Total berat pesanan: 850 gram
+  ```
+- (Opsional) Tampilkan total berat juga di halaman ringkasan sebelum checkout, agar pelanggan sudah punya gambaran.
+
+**Acceptance Criteria:**
+- [ ] Semua produk existing (dummy) sudah diisi berat wajar (bisa lewat seed/migration)
+- [ ] Form admin menolak submit jika berat kosong/0
+- [ ] Pesan WhatsApp otomatis menyertakan total berat pesanan yang benar (teruji dengan berbagai kombinasi produk & qty)
+
+---
+
+## Skill 14 — Manajemen Kategori Dinamis
+
+**Tujuan:** Admin bisa tambah/edit/hapus kategori sendiri tanpa perlu ubah kode (saat ini "Kue/Kering/Sirup" masih hardcoded).
+
+**Perubahan Database:**
+```sql
+CREATE TABLE categories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  slug VARCHAR(100) NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+- Migrasi data: masukkan 3 kategori awal (Kue, Kering, Sirup) sebagai baris pertama di tabel ini (seed).
+- Ubah kolom `category` di tabel `products` menjadi `category_id` (foreign key ke `categories.id`), atau jika ingin lebih aman tanpa migrasi berat, tetap simpan `category` sebagai string tapi validasi terhadap tabel `categories` di level aplikasi.
+
+**Perubahan Admin:**
+- Halaman baru: **Kelola Kategori** (`/admin/dashboard/kategori`) — list, tambah, edit nama, hapus.
+- Validasi hapus kategori: cegah penghapusan jika masih ada produk yang memakainya (tampilkan pesan error, atau minta admin pindahkan dulu produk ke kategori lain).
+- Form tambah/edit produk: dropdown kategori sekarang diambil dari tabel `categories`, bukan hardcoded array.
+
+**Perubahan Frontend (Katalog):**
+- Filter kategori di halaman katalog dirender dinamis dari data `categories`, bukan hardcoded 3 chip.
+
+> **Catatan dari mockup terbaru:** Referensi desain menampilkan beberapa kategori (Kue, Camilan, Sirup, Cookies, Oleh-oleh Khas Medan) — lebih banyak dari asumsi awal (3). Karena kategori sudah dinamis di skill ini, admin tinggal menambahkannya sendiri lewat halaman Kelola Kategori, TIDAK perlu perubahan kode tambahan untuk menambah kategori baru.
+>
+> Kategori **"Produk Terbatas"** yang muncul di mockup **diabaikan/tidak perlu dibuat** — bukan bagian dari scope.
+
+**Acceptance Criteria:**
+- [ ] Admin bisa tambah kategori baru dan langsung muncul sebagai filter di katalog tanpa perlu deploy ulang
+- [ ] Tidak bisa hapus kategori yang masih dipakai produk
+- [ ] Kategori awal (Kue/Kering/Sirup) tetap ada setelah migrasi, produk lama tidak "hilang" kategorinya
+
+---
+
+## Skill 15 — Keamanan Login & Form Publik: Cloudflare Turnstile + Hardening
+
+**Tujuan:** Melindungi login admin dan form Cek Pesanan dari bot dan brute force. **Cloudflare Turnstile menggantikan Google reCAPTCHA v2**, karena reCAPTCHA bermasalah saat deploy production di cPanel.
+
+> **Riwayat & status:** versi awal skill ini memakai reCAPTCHA v2 (`lib/recaptcha.ts`). Per 12 Okt 2026, kode di repo **masih reCAPTCHA**; belum ada commit Turnstile. Bila Turnstile sudah Anda bangun di tempat lain (langsung di server atau branch lain), satukan ke repo ini dulu, lalu cocokkan dengan 15.2 dan centang Acceptance Criteria.
+
+### 15.1 Setup akun (pemilik, bukan Claude Code)
+1. Buka https://dash.cloudflare.com → **Turnstile** → **Add widget**. Mode: *Managed*. Hostname: domain production (tambahkan `localhost` untuk development).
+2. Catat **Site Key** dan **Secret Key**.
+3. Isi di panel **Setup Node.js App** cPanel dan di `.env` lokal (jangan di file yang di-commit):
+   ```
+   TURNSTILE_SITE_KEY=...
+   TURNSTILE_SECRET_KEY=...
+   ```
+4. Untuk development boleh memakai test key resmi Cloudflare:
+   - Selalu lolos: site key `1x00000000000000000000AA` + secret `1x0000000000000000000000000000000AA`
+   - Selalu gagal (uji jalur error): site key `2x00000000000000000000AB` + secret `2x0000000000000000000000000000000AA`
+   - Token sudah dipakai: secret `3x0000000000000000000000000000000AA`
+
+   Test key **tidak boleh** dipakai di production.
+
+### 15.2 Yang dikerjakan Claude Code
+**Lingkup: semua tempat yang sekarang memakai reCAPTCHA** (bukan hanya login admin):
+
+| Lokasi | Perubahan |
+|---|---|
+| `lib/recaptcha.ts` | Ganti menjadi `lib/turnstile.ts` dengan fungsi `isCaptchaEnabled()`, `getCaptchaSiteKey()`, `verifyCaptcha(token, ip)` |
+| `app/api/admin/auth/route.ts` | Field body `recaptchaToken` → `captchaToken` |
+| `app/api/orders/route.ts` (GET) | Verifikasi token Turnstile pada pencarian pesanan |
+| `app/admin/login/page.tsx`, `app/cek-pesanan/page.tsx` | Site key tetap dibaca di server dan dikirim sebagai prop (agar bisa diganti tanpa build ulang) |
+| `components/admin/LoginForm.tsx`, `components/order/CheckOrderView.tsx` | Logika widget yang sekarang duplikat dijadikan satu komponen `components/security/CaptchaWidget.tsx` |
+| `locales/id.json`, `locales/en.json`, `components/admin/admin.module.css` | Teks "centang reCAPTCHA" diganti netral; class CSS disesuaikan |
+| `.env.example`, `README.md`, `DEPLOYMENT.md` | `RECAPTCHA_*` → `TURNSTILE_*` |
+
+**Detail teknis:**
+- **Client:** muat `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit`, render dengan `window.turnstile.render(el, { sitekey, callback, "expired-callback", "error-callback" })`, dan panggil `turnstile.reset(widgetId)` setelah setiap submit. Token **sekali pakai** dan berlaku **300 detik**.
+- **Server:** `POST https://challenges.cloudflare.com/turnstile/v0/siteverify` (form-urlencoded) berisi `secret`, `response`, dan `remoteip` (opsional). Lolos hanya bila `success === true`. Disarankan juga mencocokkan `hostname` dengan domain di `NEXT_PUBLIC_SITE_URL`. Timeout fetch 8 detik → dianggap gagal.
+- **Fail-closed di production:** bila `NODE_ENV=production` dan `TURNSTILE_SECRET_KEY` kosong, **tolak** request. Jangan dilewati diam-diam seperti perilaku reCAPTCHA sekarang. Mode lewati hanya boleh di development.
+- **Urutan cek tetap:** rate limit → captcha → cek kredensial/query DB.
+- Setelah selesai, `grep -ri recaptcha app components lib locales` harus kosong.
+- Bila nanti menambah Content-Security-Policy (Skill 21.2 no. 8), izinkan `https://challenges.cloudflare.com` di `script-src` dan `frame-src`.
+
+### 15.3 Hardening yang sudah ada (pertahankan)
+- Rate limit 5 kegagalan / 15 menit per IP (`lib/rate-limit.ts`).
+- Password admin di-hash dengan scrypt (`lib/auth.ts`).
+- Cookie sesi `httpOnly`, `secure` di production, `sameSite=strict`.
+- HTTPS wajib di production (lihat `DEPLOYMENT.md`).
+
+### 15.4 Kendala cPanel yang perlu dicek
+- Server harus boleh melakukan request keluar ke `challenges.cloudflare.com`. Sebagian shared hosting memblokir koneksi keluar. Uji login dengan key asli **di server**; bila gagal karena error jaringan, minta provider membuka akses.
+- Hostname widget harus sama persis dengan domain production, termasuk `www` bila dipakai.
+
+**Acceptance Criteria:**
+- [ ] Login admin dan Cek Pesanan menolak request tanpa token Turnstile yang valid, dan verifikasinya terjadi di server
+- [ ] Token yang dipakai ulang ditolak (`timeout-or-duplicate`) dan widget ter-reset setelah setiap submit
+- [ ] Di production tanpa secret, request ditolak (bukan dilewati)
+- [ ] Tidak ada sisa kode atau teks reCAPTCHA
+- [ ] Rate limit tetap berjalan dan urutan cek tidak berubah
+- [ ] Sudah diuji di server cPanel sungguhan, bukan hanya di lokal
+
+---
+
+## Skill 16 — Halaman Setting Admin (Ganti Username & Password)
+
+**Tujuan:** Admin bisa mengubah username & password sendiri dari dashboard, tanpa perlu ubah langsung ke database.
+
+**Perubahan Admin:**
+- Halaman baru: **Pengaturan Akun** (`/admin/dashboard/pengaturan`), hanya bisa diakses setelah login.
+- Form terdiri dari:
+  - Username baru (opsional diubah)
+  - Password saat ini (**wajib diisi** untuk verifikasi sebelum perubahan apa pun disimpan)
+  - Password baru (opsional diubah)
+  - Konfirmasi password baru (harus sama dengan password baru)
+
+**Logika Backend:**
+1. Ambil data admin yang sedang login dari session.
+2. Cocokkan **password saat ini** yang diinput dengan hash password di database (`verifyPassword` di `lib/auth.ts`, scrypt) — jika tidak cocok, tolak seluruh perubahan dan tampilkan error, JANGAN proses field lain.
+3. Jika password saat ini valid:
+   - Jika username baru diisi & berbeda dari yang lama → validasi belum dipakai admin lain (kalau nanti ada multi-admin) → update.
+   - Jika password baru diisi → validasi sama dengan konfirmasi → hash dengan `hashPassword` (scrypt) → update.
+4. Setelah berhasil ubah password, **invalidasi session yang sedang aktif** dan minta admin login ulang dengan kredensial baru (langkah keamanan supaya sesi lama tidak terus valid).
+
+**Validasi Tambahan:**
+- Panjang password baru minimal 8 karakter (silakan sesuaikan kebijakan).
+- Tampilkan pesan sukses/gagal yang jelas, tapi jangan bocorkan info spesifik (misal jangan bedakan pesan error antara "username salah" vs "password salah" pada proses verifikasi password saat ini — cukup "Password saat ini salah").
+
+**Acceptance Criteria:**
+- [ ] Perubahan gagal total jika password saat ini salah (tidak ada field lain yang ter-update)
+- [ ] Password baru tersimpan dalam bentuk hash, bukan plain text
+- [ ] Setelah ganti password, sesi admin lama otomatis logout dan harus login ulang
+- [ ] Username baru tidak bisa kosong jika field itu diisi (validasi dasar)
+
+---
+
+## Skill 17 — Redesign Tampilan (Referensi PNG Baru)
+
+**Tujuan:** Memperbarui tampilan frontend & admin mengikuti referensi desain PNG baru, yang layout-nya cukup berbeda dari versi awal — palet warna berubah (merah marun dihapus, hijau tua + emas + krem dipertahankan).
+
+**Konteks penting:** Ini perubahan *presentasi*, bukan perubahan *logika bisnis*. Alur checkout, WhatsApp, status pesanan, dsb TIDAK berubah — hanya tampilannya.
+
+### Pendekatan yang disarankan (jangan minta rombak semua sekaligus)
+1. **Update dulu variabel warna global** (`--color-primary`, dst di CSS) sesuai `CLAUDE.md` bagian 5 — ini otomatis akan mengubah warna di banyak komponen sekaligus tanpa perlu sentuh tiap file.
+2. **Redesign per halaman**, bukan seluruh aplikasi dalam satu prompt. Urutan yang disarankan:
+   - Beranda
+   - Katalog produk
+   - Detail produk
+   - Keranjang & checkout
+   - Dashboard admin (bisa belakangan, karena lebih fungsional daripada estetika)
+3. Untuk tiap halaman: lampirkan PNG referensi halaman itu spesifik di Claude Code, lalu instruksikan misalnya:
+   ```
+   Ini referensi desain baru untuk halaman Beranda (lampiran PNG).
+   Perbarui layout & styling halaman ini agar sesuai referensi:
+   - [sebutkan detail: posisi hero, susunan grid produk, dsb]
+   Jangan ubah logika data/fetching yang sudah ada, hanya struktur & style JSX/CSS-nya.
+   Gunakan variabel warna dari :root yang sudah diperbarui (tanpa merah marun).
+   ```
+4. Setelah tiap halaman selesai, **cek dulu di browser** sebelum lanjut ke halaman berikutnya — supaya kalau ada yang meleset, ketahuan lebih awal dan tidak menumpuk revisi.
+
+**Acceptance Criteria:**
+- [ ] Tidak ada lagi warna merah marun (`#8B1E1E`) tersisa di kode manapun
+- [ ] Semua halaman utama sudah disesuaikan dengan referensi PNG baru
+- [ ] Fungsi/alur bisnis (checkout, WhatsApp, status pesanan, admin) tetap berjalan normal setelah redesign — tidak ada fitur yang rusak akibat perubahan tampilan
+- [ ] Header menampilkan tombol "Chat via WhatsApp" persisten (selalu terlihat, bukan hanya di halaman produk)
+- [ ] Ikon keranjang di header menampilkan badge angka jumlah item saat ada isi di keranjang
+- [ ] Nama brand "Rasa Medan" + tagline "Oleh-oleh Khas Medan" konsisten dipakai di logo/header
+
+---
+
+## Skill 18 — Lokasi Toko & Info Kontak Diperluas
+
+**Tujuan:** Menambahkan section Lokasi Toko dengan peta, jam operasional, dan tautan media sosial sesuai mockup terbaru.
+
+**Peta Google Maps (tanpa perlu API key berbayar):**
+- Gunakan **Google Maps Embed via iframe gratis**, bukan Maps JavaScript API (yang butuh billing account). Caranya:
+  1. Buka Google Maps, cari lokasi toko.
+  2. Klik "Bagikan" → tab "Sematkan peta" (Embed a map) → salin kode `<iframe>` yang diberikan.
+  3. Simpan URL src dari iframe itu ke variabel environment, misal `NEXT_PUBLIC_MAPS_EMBED_URL`.
+- Tombol "Buka di Google Maps" cukup link biasa ke URL Google Maps toko (bukan iframe).
+
+**Environment Variables Baru (tambahkan ke `.env.example`):**
+```
+NEXT_PUBLIC_STORE_NAME="Rasa Medan"
+NEXT_PUBLIC_STORE_ADDRESS="Jl. Sisingamangaraja No.123, Medan, Sumatera Utara, Indonesia"
+NEXT_PUBLIC_MAPS_EMBED_URL=https://www.google.com/maps/embed?pb=...
+NEXT_PUBLIC_MAPS_LINK_URL=https://maps.google.com/?q=...
+NEXT_PUBLIC_STORE_HOURS_WEEKDAY="Senin-Sabtu 09.00-18.00 WIB"
+NEXT_PUBLIC_STORE_HOURS_WEEKEND="Minggu: Tutup / by request"
+NEXT_PUBLIC_IG_URL=https://instagram.com/rasamedan
+NEXT_PUBLIC_TIKTOK_URL=https://tiktok.com/@rasamedan
+NEXT_PUBLIC_FB_URL=https://facebook.com/rasamedan
+```
+
+**Perubahan Frontend:**
+- Section baru di beranda: "Lokasi Toko Kami" — nama toko, alamat, embed peta, tombol "Buka di Google Maps", link "Lihat semua" (opsional, jika nanti ada multi-lokasi).
+- Footer diperbarui: tambahkan blok Jam Operasional dan ikon-ikon media sosial (Instagram, TikTok, Facebook) yang mengarah ke env variable di atas.
+- Section trust/USP baru (5 ikon): Halal & BPOM/PIRT, Pesan Tanpa Login, Konfirmasi via WhatsApp, Pengiriman Next-Day, Transaksi Aman — konten statis, tidak perlu database, cukup hardcode di komponen.
+
+**Acceptance Criteria:**
+- [ ] Peta tampil dan menunjuk ke lokasi toko yang benar
+- [ ] Tombol "Buka di Google Maps" membuka tab baru ke lokasi yang sama
+- [ ] Jam operasional & tautan sosial media bisa diubah lewat `.env` tanpa perlu ubah kode
+- [ ] Section trust/USP tampil di beranda sesuai mockup (5 item)
+- [ ] Semua elemen baru responsif di mobile
+
+---
+
+## Skill 19 — Optimasi SEO & Google Indexing
+
+**Tujuan:** Memaksimalkan peluang situs muncul di hasil pencarian Google, baik untuk pencarian umum ("oleh-oleh khas Medan") maupun pencarian produk spesifik.
+
+### 19.1 Metadata per Halaman (Next.js Metadata API)
+- Gunakan `generateMetadata()` di setiap halaman (App Router) untuk mengatur:
+  - `title` unik per halaman (misal: `"Bika Ambon Original - Rasa Medan | Oleh-oleh Khas Medan"`)
+  - `description` unik & deskriptif (150-160 karakter), bukan generik
+  - `canonical` URL untuk menghindari duplicate content (penting kalau ada filter/query string di URL katalog)
+
+### 19.2 Open Graph & Twitter Card
+- Setiap halaman produk & beranda perlu meta tag Open Graph (`og:title`, `og:description`, `og:image`, `og:url`) supaya tampilan link bagus saat dibagikan ke WhatsApp/Facebook/Instagram — ini juga membantu CTR dari pencarian.
+
+### 19.3 Structured Data (JSON-LD)
+Tambahkan schema markup supaya Google bisa menampilkan rich snippet (harga, stok, rating jika ada nanti):
+- **Product schema** di setiap halaman detail produk (nama, harga, ketersediaan, gambar).
+- **LocalBusiness schema** di halaman beranda/kontak, memakai data dari Skill 18 (nama toko, alamat, jam operasional, nomor telepon) — ini juga membantu Google Maps/Google Business terhubung ke situs.
+- **BreadcrumbList schema** untuk navigasi (Beranda > Kategori > Produk).
+
+### 19.4 Sitemap & Robots.txt
+- Generate `sitemap.xml` otomatis (bisa pakai library `next-sitemap` atau route handler manual) yang mencakup semua halaman produk, kategori, dan halaman statis — regenerate otomatis saat ada produk baru.
+- Buat `robots.txt` yang mengizinkan crawl ke halaman publik, tapi **blokir** halaman admin (`/admin/*`) dari indexing.
+
+### 19.5 URL & Struktur Semantik
+- Pastikan slug produk/kategori sudah SEO-friendly (huruf kecil, pakai tanda hubung, tanpa karakter aneh) — ini sudah sejalan dengan field `slug` yang ada di `dummy-products.json`.
+- Struktur heading yang benar: satu `<h1>` per halaman (biasanya nama produk/judul halaman), `<h2>`/`<h3>` untuk sub-bagian.
+- Semua gambar produk wajib punya atribut `alt` yang deskriptif (bukan kosong atau nama file), misal: `alt="Bika Ambon Original - Rasa Medan"`.
+
+### 19.6 Performa (Core Web Vitals)
+Google menjadikan kecepatan situs sebagai faktor ranking:
+- Gunakan `next/image` untuk semua gambar produk (otomatis lazy-load & optimasi ukuran).
+- Hindari layout shift: tentukan `width`/`height` gambar secara eksplisit.
+- Minify CSS/JS otomatis lewat build Next.js (`next build` sudah menangani ini).
+
+### 19.7 Dwibahasa (ID/EN) & SEO
+- Tambahkan tag `hreflang` (`<link rel="alternate" hreflang="id" .../>` dan `hreflang="en"`) supaya Google tahu versi bahasa mana yang ditampilkan ke pengguna sesuai lokasi/preferensi mereka.
+
+### 19.8 Langkah di Luar Kode (Harus Dilakukan Anda Sendiri)
+Ini tidak bisa dikerjakan Claude Code karena butuh akses akun Anda:
+1. Daftarkan situs ke **Google Search Console** (search.google.com/search-console), verifikasi kepemilikan (biasanya via meta tag yang ditambahkan Claude Code ke `<head>`, atau upload file verifikasi).
+2. Submit `sitemap.xml` Anda lewat Search Console setelah situs live.
+3. Daftarkan bisnis Anda ke **Google Business Profile** (business.google.com) — ini yang membuat toko Anda muncul di Google Maps & panel info bisnis saat orang cari nama toko Anda. Alamat & jam operasional bisa disamakan dengan yang ada di `.env` (Skill 18).
+4. (Opsional, sangat disarankan) Setelah live, cek performa situs lewat **PageSpeed Insights** (pagespeed.web.dev) untuk memastikan skor Core Web Vitals baik.
+
+**Acceptance Criteria:**
+- [ ] Setiap halaman produk & kategori punya title/description unik (cek via view-source, bukan generik semua sama)
+- [ ] `sitemap.xml` bisa diakses di `/sitemap.xml` dan mencakup semua produk
+- [ ] `robots.txt` memblokir `/admin/*` tapi mengizinkan halaman publik
+- [ ] Structured data lolos validasi di [Google Rich Results Test](https://search.google.com/test/rich-results)
+- [ ] Semua gambar produk punya atribut `alt` yang terisi
+- [ ] Skor PageSpeed Insights (setelah deploy) minimal "Good" untuk Core Web Vitals utama
+
+---
+
+# BAGIAN C — Gerbang Kualitas (Skill 20–21)
+
+Kedua skill ini **berulang**: dijalankan pada setiap skill lain (lihat "Alur Kerja Setiap Skill"), bukan dikerjakan sekali lalu selesai. Subagent-nya hanya membaca dan melaporkan; perbaikan dikerjakan sesi utama, sehingga agent yang menilai tidak menilai pekerjaannya sendiri.
+
+---
+
+## Skill 20 — Code Review
+
+**Tujuan:** Setiap perubahan direview sebelum commit, dan seluruh kode diaudit berkala, supaya bug dan pelanggaran aturan bisnis tertangkap sebelum sampai ke pelanggan.
+
+**Alat:** subagent `code-reviewer` (`.claude/agents/code-reviewer.md`).
+
+### 20.1 Mode per-skill (wajib di setiap skill)
+Setelah implementasi dan build lolos:
+```
+Pakai subagent code-reviewer untuk review perubahan Skill N yang belum di-commit.
+Cocokkan dengan Acceptance Criteria Skill N di SKILLS.md.
+```
+Perbaiki temuan **Kritis** dan **Penting** di sesi utama, lalu jalankan review ulang sampai bersih. Temuan **Minor** boleh dicatat ke backlog 20.4.
+
+### 20.2 Mode audit penuh (sebelum deploy, dan setiap ±5 skill)
+```
+Pakai subagent code-reviewer untuk audit seluruh kode di app/, components/, lib/, scripts/, dan db/.
+Fokus: konsistensi daftar status pesanan di semua lokasi, harga dihitung ulang di server,
+transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-end.
+```
+
+### 20.3 Pemeriksaan otomatis yang harus lolos
+- `npx tsc --noEmit` tanpa error
+- `npm run build` sukses
+- `npm run lint` (bila sudah dikonfigurasi)
+- Tidak ada file sementara/debug yang ter-track: `git ls-files | grep -E "_tmp|probe"` kosong
+
+### 20.4 Backlog dari audit 12 Okt 2026 (verifikasi ulang sebelum dikerjakan)
+- **Berat per varian** tidak bisa diisi dari admin (`replaceVariants` di `lib/product-admin.ts` selalu menulis 0) → Skill 13 belum lengkap.
+- **`price_delta` varian** tidak dipakai di kode, padahal README menyebutnya terbawa ke keranjang → implementasikan atau hapus klaim di README.
+- **`is_featured`** tidak punya UI admin → "Produk pilihan" di beranda sebenarnya produk ber-id terkecil.
+- **Fallback diam-diam ke `data/dummy-products.json`** saat query DB gagal di production → checkout kemudian gagal "Produk tidak ditemukan" tanpa ada yang tahu DB bermasalah. Di production sebaiknya tampilkan pesan error dan tulis log.
+- **`public/images/hero-medan.png` 9 MB** dipakai sebagai hero, OG image, dan gambar JSON-LD → kompres ke WebP ±200 KB. Ganti juga foto yang memuat label merek pihak lain dengan foto produk sendiri.
+- **PNG mockup ±12 MB ikut di repo** (`Generated_Image_*.png`, `rasamedan_frontend.png`, `rasamedan_backend.png`) → pindahkan keluar repo.
+- **i18n:** 8 string di `en.json` belum diterjemahkan; ±9 pesan di komponen admin masih hardcode. Putuskan apakah admin cukup berbahasa Indonesia, lalu catat keputusan itu di `CLAUDE.md`.
+- **Dokumen:** header PRD masih "Versi 1.0" padahal sudah memuat revisi v1.1.
+
+**Acceptance Criteria:**
+- [ ] Setiap skill punya review `code-reviewer` tanpa temuan Kritis/Penting sebelum di-commit
+- [ ] Semua pemeriksaan 20.3 lolos
+- [ ] Tiap butir backlog 20.4 dikerjakan, atau diputuskan "tidak dikerjakan" dengan alasan tercatat
+
+---
+
+## Skill 21 — Security Review & Hardening
+
+**Tujuan:** Menutup celah keamanan yang nyata sebelum go-live, dan memastikan setiap perubahan sensitif diaudit.
+
+**Alat:** subagent `security-auditor` (`.claude/agents/security-auditor.md`). Agent ini hanya membaca dan tidak menampilkan nilai rahasia.
+
+### 21.1 Kapan dijalankan
+- Setiap skill yang menyentuh login/sesi, API route, upload, captcha, form publik, environment variable, dependensi baru, atau layanan pihak ketiga (mis. Skill 15 dan 22):
+  ```
+  Pakai subagent security-auditor untuk audit perubahan Skill N.
+  ```
+- Wajib sebelum setiap deploy ke cPanel:
+  ```
+  Pakai subagent security-auditor untuk audit penuh sebelum deploy, lalu isi checklist 21.3.
+  ```
+
+### 21.2 Perbaikan wajib dari audit 12 Okt 2026 (kerjakan berurutan)
+1. **[Kritis] Rotasi `ADMIN_SESSION_SECRET`.** Nilai aslinya pernah ter-commit di `.env.example` (commit `ca47eef`, sudah ada di GitHub). Siapa pun yang memegang nilai itu bisa membuat cookie admin yang valid tanpa login.
+   - *Pemilik:* buat secret baru (`openssl rand -hex 32`), pasang di panel Node.js App cPanel dan `.env` lokal, lalu restart aplikasi. Semua admin akan ter-logout; itu memang yang diharapkan.
+   - *Claude Code:* ganti nilai di `.env.example` menjadi placeholder. Riwayat git tetap menyimpan nilai lama, jadi **rotasi** adalah perbaikan yang sebenarnya; menulis ulang riwayat git tidak wajib setelah secret dirotasi.
+2. **[Tinggi] Hapus fallback secret** di `lib/auth.ts`. Di production, tanpa `ADMIN_SESSION_SECRET` (atau bila kurang dari 32 karakter) aplikasi harus menolak login, bukan memakai string hardcode `"dev-insecure-secret-change-me"`.
+3. **[Tinggi] Lindungi `POST /api/orders`** dari banjir pesanan palsu:
+   - Pasang Turnstile (Skill 15) di form checkout.
+   - Rate limit, mis. 10 pesanan per jam per IP.
+   - Batas panjang input: nama ≤100, alamat ≤500, catatan ≤500 karakter.
+   - Batas isi: ≤50 baris item, qty ≤99 per baris.
+4. **[Sedang] Sumber IP untuk rate limit.** Entri paling kiri `X-Forwarded-For` bisa diisi klien. Di server, log isi `x-forwarded-for` dan `x-real-ip` dari request uji untuk melihat header mana yang ditimpa proxy cPanel/Passenger, lalu ambil IP dari posisi yang dipercaya (biasanya entri yang ditambahkan proxy, paling kanan).
+5. **[Sedang] Cabut sesi saat ganti password.** Tambah kolom `admin_users.session_version INT NOT NULL DEFAULT 0` (dengan migrasi idempotent), masukkan nilainya ke payload token, cocokkan di `getAdminSession()`, dan naikkan saat password diganti. Sesi di perangkat lain otomatis tidak berlaku lagi.
+6. **[Sedang] Upload foto.** Validasi *magic bytes* (JPEG/PNG/WEBP/GIF), jangan percaya `file.type` dari klien. Pastikan `public/uploads` tidak bisa mengeksekusi skrip (di cPanel: `.htaccess` yang mematikan handler PHP/CGI di folder itu).
+7. **[Rendah] JSON-LD.** Di `components/seo/JsonLd.tsx`, escape `<` (`JSON.stringify(data).replace(/</g, "\\u003c")`) karena nama dan deskripsi produk berasal dari DB.
+8. **[Rendah] Header keamanan** lewat `headers()` di `next.config.mjs` (aman untuk cPanel): `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, dan CSP dasar yang tetap mengizinkan embed Google Maps dan Turnstile.
+9. **[Rendah] Kebersihan repo.** Hapus `scripts/_tmp_dbtest.mjs` dari git. Tambahkan `.claude/settings.local.json` ke `.gitignore`, lalu keluarkan dari git dengan `git rm --cached`.
+10. **[Rendah] Password admin default** (`admin123` dari `npm run seed:admin`) wajib diganti sebelum go-live.
+
+### 21.3 Checklist pre-deploy (isi setiap kali deploy)
+- [ ] Audit penuh `security-auditor`: tidak ada temuan Kritis/Tinggi yang masih terbuka
+- [ ] Secret sesi production unik, ≥32 karakter, dan tidak pernah ter-commit
+- [ ] Turnstile aktif dengan key production (bukan test key) dan sudah diuji di server
+- [ ] SSL aktif, dan `NEXT_PUBLIC_SITE_URL` berisi domain https yang asli
+- [ ] Password admin default sudah diganti
+- [ ] `public/uploads` tidak bisa mengeksekusi skrip
+- [ ] `npm audit --omit=dev` tanpa celah tinggi yang relevan
+- [ ] File `.env` tidak ikut ter-upload ke folder publik
+
+**Acceptance Criteria:**
+- [ ] Butir 21.2 no. 1–3 selesai sebelum go-live
+- [ ] Butir 21.2 no. 4–10 selesai, atau diputuskan dengan alasan tercatat
+- [ ] Checklist 21.3 terisi pada setiap deploy
+
+
+---
+
+# BAGIAN D — Fitur Baru
+
+## Skill 22 — Lacak Pengiriman (Tracking Resi) via api.co.id
+
+**Tujuan:** Setelah pesanan dikirim, pelanggan bisa melihat posisi paketnya langsung di halaman Cek Pesanan, tanpa perlu bertanya ke admin lewat WhatsApp. Ini mendukung metrik PRD §7 (mengurangi chat "pesanan saya sampai mana?").
+
+**Batas lingkup (tetap sesuai `CLAUDE.md` §6):** skill ini **hanya melacak**. Ongkir tetap dihitung manual oleh pemilik, pemesanan kurir tetap manual, dan status pesanan tetap diubah manual oleh admin.
+
+### 22.0 Verifikasi sebelum coding — GERBANG (dikerjakan pemilik)
+Halaman produk api.co.id hanya menjelaskan tracking untuk pengiriman yang **dibuat lewat API mereka** (`POST /courier/v1/orders`). Belum jelas apakah endpoint tracking juga menerima nomor resi dari kiriman yang Anda pesan sendiri di agen atau aplikasi kurir. Jawaban ini menentukan seluruh desain, jadi pastikan dulu:
+
+1. Daftar di https://api.co.id dan ambil API key (dikirim lewat header `x-api-co-id`).
+2. Baca dokumentasi Kurir API: https://docs.api.co.id/kurir-api/getting-started
+3. Uji `GET https://use.api.co.id/courier/v1/orders/track/{resi}` dengan **satu nomor resi asli** dari kiriman Anda sebelumnya (JNE/J&T/SiCepat), atau tanyakan langsung ke sales api.co.id lewat WhatsApp di halaman produk mereka.
+4. Catat hasilnya:
+   - [ ] Resi dari kiriman di luar api.co.id didukung? Ya / Tidak
+   - [ ] Contoh respons JSON asli (tanpa data pribadi) disimpan di `docs/api-co-id-track-sample.json`
+   - [ ] Daftar kode kurir dari `GET /courier/v1/couriers`
+   - [ ] Biaya tracking (halaman produk menyebut gratis; konfirmasi)
+
+**Keputusan berdasarkan hasil:**
+- **Jalur A — resi eksternal didukung:** kerjakan 22.1 sampai 22.6.
+- **Jalur B — hanya pengiriman yang dibuat lewat api.co.id:** tracking menuntut Anda memesan kurir lewat API (saldo terpotong, butuh kode kecamatan asal/tujuan dan alamat pickup). Itu mengubah alur bisnis PRD §2, jadi **jangan dikerjakan di skill ini**. Minta `architect` merancang skill terpisah dan perbarui PRD lebih dulu. Sementara itu kerjakan **jalur cadangan**: 22.1–22.3 saja, dengan menampilkan resi dan tautan ke halaman lacak resmi kurir, tanpa memanggil API.
+
+### 22.1 Data
+Migrasi idempotent `scripts/migrate-add-shipment.mjs` (daftarkan di `package.json`), dan perbarui `db/schema.sql`:
+```sql
+ALTER TABLE orders
+  ADD COLUMN courier_code        VARCHAR(30) NULL AFTER fulfillment_method,
+  ADD COLUMN waybill             VARCHAR(50) NULL AFTER courier_code,
+  ADD COLUMN shipped_at          DATETIME    NULL AFTER waybill,
+  ADD COLUMN tracking_summary    TEXT        NULL,  -- JSON ternormalisasi, bukan payload mentah
+  ADD COLUMN tracking_checked_at DATETIME    NULL,
+  ADD KEY idx_orders_waybill (waybill);
+```
+Kolom `tracking_summary` memakai `TEXT` (bukan `JSON`) agar aman di MySQL maupun MariaDB cPanel.
+
+### 22.2 Admin: input kurir & resi
+- Di `/admin/pesanan`, untuk pesanan bermetode kurir: dropdown kurir dan field nomor resi. Daftar kurir (kode api.co.id hasil 22.0, nama tampil, dan URL lacak resmi yang sudah diverifikasi) disimpan di `lib/couriers.ts`.
+- Endpoint baru `PATCH /api/admin/orders/[id]/shipment`, dengan `getAdminSession()` di awal. Validasi: kode kurir ada di daftar, resi cocok dengan `^[A-Za-z0-9-]{6,40}$`, dan pesanan bermetode `kurir`. Isi `shipped_at` saat resi pertama kali disimpan.
+- Saat status diubah ke `Dikirim` tanpa resi, tampilkan peringatan (bukan blokir, karena pemilik bisa saja mengisinya belakangan).
+- Daftar status pesanan **tidak berubah** (PRD §2.1).
+
+### 22.3 Pelanggan: tampilan di Cek Pesanan
+- Untuk pesanan yang sudah punya resi: tampilkan nama kurir, nomor resi (dengan tombol salin), dan linimasa perjalanan paket (Jalur A) atau tautan "Lacak di situs kurir" (jalur cadangan).
+- Data hanya muncul lewat pencarian yang sudah ada (no HP + Turnstile + rate limit). **Tidak ada endpoint publik baru** yang menerima resi bebas, supaya resi milik orang lain tidak bisa ditebak-tebak.
+- Semua teks antarmuka lewat `locales/id.json` dan `locales/en.json`. Isi riwayat dari kurir ditampilkan apa adanya.
+
+### 22.4 Integrasi api.co.id (server-only, Jalur A)
+- `lib/tracking.ts`, tidak boleh diimpor komponen klien: `GET https://use.api.co.id/courier/v1/orders/track/{encodeURIComponent(waybill)}` dengan header `x-api-co-id: process.env.API_CO_ID_KEY` (env server, **bukan** `NEXT_PUBLIC_`), timeout 8 detik lewat `AbortController`.
+- Tulis normalizer berdasarkan **respons asli dari 22.0**; jangan menebak nama field. Bentuk hasil: `{ status, delivered: boolean, events: [{ time, description, location }] }`. Simpan hasil ternormalisasi ke `tracking_summary`, bukan payload mentah.
+- **Cache:** panggil API hanya bila pesanan berstatus `Dikirim`, punya resi, dan `tracking_checked_at` lebih lama dari 30 menit. Selain itu pakai cache. Bila API gagal atau timeout, tampilkan cache terakhir dengan keterangan "terakhir diperbarui …"; halaman tidak boleh error.
+- Webhook api.co.id (`order.shipping`, `order.delivered`, dst.) hanya berlaku untuk pengiriman yang dibuat lewat API mereka, jadi tidak dipakai di Jalur A.
+- Bila paket terdeteksi sudah diterima, tampilkan saran di admin: "Paket sudah diterima — tandai Selesai?". Status tetap diubah manual oleh admin.
+
+### 22.5 Env & dokumen
+- `.env.example`: tambah `API_CO_ID_KEY=` (kosong = tracking lewat API nonaktif, otomatis memakai jalur cadangan).
+- PRD: tambah §3.10 "Lacak Pengiriman", dan tegaskan ongkir otomatis tetap di luar cakupan.
+- `DEPLOYMENT.md`: env baru, dan pastikan server boleh request keluar ke `use.api.co.id`.
+
+### 22.6 Review
+`architect` (sebelum coding) → `code-reviewer` (Skill 20) → `security-auditor` (Skill 21). Fokus keamanan: API key tidak bocor ke klien, resi di-encode di URL, dan tidak ada cara melihat resi milik pelanggan lain.
+
+**Acceptance Criteria:**
+- [ ] 22.0 sudah terisi dan jalurnya (A / B / cadangan) diputuskan sebelum coding
+- [ ] Admin bisa menyimpan kurir dan resi; format yang salah ditolak
+- [ ] Pelanggan melihat resi dan linimasa (Jalur A) atau tautan lacak kurir (cadangan), hanya untuk pesanannya sendiri
+- [ ] API dipanggil paling banyak 1× per 30 menit per pesanan; API mati tidak membuat halaman Cek Pesanan error
+- [ ] `API_CO_ID_KEY` tidak muncul di bundle klien (`grep -r API_CO_ID .next/static` kosong)
+- [ ] Status pesanan tetap manual dan alur ongkir tidak berubah
+
+---
+
+*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 23, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*

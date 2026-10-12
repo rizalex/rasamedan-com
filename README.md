@@ -3,7 +3,7 @@
 Website katalog + pemesanan untuk UMKM oleh-oleh khas Medan. Pelanggan browsing & checkout **tanpa akun/login**; transaksi diselesaikan manual via WhatsApp. Admin mengelola produk, kategori, dan status pesanan via dashboard.
 
 > Source of truth requirement: `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md`
-> Panduan agent: `CLAUDE.md` · Modul kerja: `SKILLS.md` + `SKILLS-ADDENDUM.md` · Deploy: `DEPLOYMENT.md`
+> Panduan agent: `CLAUDE.md` · Modul kerja: `SKILLS.md` (Skill 1–22) · Deploy: `DEPLOYMENT.md`
 
 ## 1. Cara Kerja (Business Flow)
 
@@ -131,5 +131,6 @@ Lihat `DEPLOYMENT.md`. Intinya: buat DB + import `db/schema.sql` via phpMyAdmin,
 
 - `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md` — requirement & roadmap
 - `CLAUDE.md` — aturan agent/tech stack/aturan bisnis/DoD
-- `SKILLS.md` (Skill 1–12 MVP) + `SKILLS-ADDENDUM.md` (Skill 13–19: berat, kategori, reCAPTCHA, pengaturan, redesign, lokasi, SEO)
+- `SKILLS.md` — satu file berisi Skill 1–12 (MVP), 13–19 (berat, kategori, Turnstile, pengaturan, redesign, lokasi, SEO), 20–21 (code & security review), 22 (lacak pengiriman)
+- `.claude/agents/` — subagent `architect`, `code-reviewer`, `security-auditor`
 - `DEPLOYMENT.md` — panduan cPanel langkah-demi-langkah
