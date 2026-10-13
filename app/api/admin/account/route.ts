@@ -134,7 +134,9 @@ export async function PUT(req: Request) {
           { status: 400 }
         );
       }
-      setClauses.push("password_hash = ?");
+      // Naikkan versi sesi dalam UPDATE yang sama (atomik): semua sesi admin di
+      // perangkat mana pun langsung tidak berlaku (Skill 21.2 no. 5).
+      setClauses.push("password_hash = ?", "session_version = session_version + 1");
       params.push(hashPassword(newPassword));
       passwordChanged = true;
     }
@@ -152,14 +154,17 @@ export async function PUT(req: Request) {
       params
     );
 
-    // Setelah ganti password, paksa login ulang (invalidasi sesi lama).
+    // Setelah ganti password, paksa login ulang di perangkat ini juga (sesi di
+    // perangkat lain sudah gugur lewat session_version).
     if (passwordChanged) {
       await clearAdminCookie();
     }
 
     return NextResponse.json({ ok: true, usernameChanged, passwordChanged });
   } catch (err) {
-    console.error("PUT /api/admin/account gagal:", err);
+    // Log ringkas: objek error pool.query() memuat SQL berisi hash password baru.
+    const e = err as { code?: string; message?: string };
+    console.error("PUT /api/admin/account gagal:", e.code ?? e.message ?? "unknown");
     return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });
   }
 }

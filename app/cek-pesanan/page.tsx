@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import CheckOrderView from "@/components/order/CheckOrderView";
-import { getRecaptchaSiteKey } from "@/lib/recaptcha";
+import { getCaptchaSiteKey } from "@/lib/turnstile";
 import { buildMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +17,11 @@ export const metadata: Metadata = buildMetadata({
 
 export default function CheckOrderPage() {
   // Site key dikirim dari server (bukan NEXT_PUBLIC) agar bisa diganti tanpa build ulang.
-  const recaptchaSiteKey = getRecaptchaSiteKey();
+  const captchaSiteKey = getCaptchaSiteKey();
   return (
     <>
       <Header />
-      <CheckOrderView recaptchaSiteKey={recaptchaSiteKey} />
+      <CheckOrderView captchaSiteKey={captchaSiteKey} />
       <Footer />
     </>
   );

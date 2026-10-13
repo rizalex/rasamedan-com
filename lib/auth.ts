@@ -6,6 +6,9 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { cookies } from "next/headers";
+import { cache } from "react";
+import type { RowDataPacket } from "mysql2";
+import { query } from "@/lib/db";
 
 /**
  * Auth admin sederhana (bukan untuk pelanggan).
@@ -91,16 +94,22 @@ function sign(data: string): string {
   return createHmac("sha256", secret()).update(data).digest("base64url");
 }
 
-export function createSessionToken(adminId: number): string {
+/**
+ * Token sesi memuat `ver` = admin_users.session_version saat login (Skill 21.2
+ * no. 5). Versi dinaikkan saat password diganti → semua token lama (di perangkat
+ * mana pun) otomatis tidak berlaku. Bukan pengganti rotasi secret: pemegang
+ * secret bocor tetap bisa menebak `ver` (angka kecil).
+ */
+export function createSessionToken(adminId: number, version: number): string {
   const payload = Buffer.from(
-    JSON.stringify({ sub: adminId, exp: Date.now() + MAX_AGE_SEC * 1000 })
+    JSON.stringify({ sub: adminId, ver: version, exp: Date.now() + MAX_AGE_SEC * 1000 })
   ).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
 export function verifySessionToken(
   token: string | undefined
-): { sub: number } | null {
+): { sub: number; ver: number } | null {
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
@@ -111,21 +120,47 @@ export function verifySessionToken(
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (!data.exp || Date.now() > data.exp) return null;
-    return { sub: Number(data.sub) };
+    // Token lama tanpa versi ditolak (admin cukup login ulang sekali).
+    if (!Number.isInteger(data.ver) || !Number.isInteger(data.sub)) return null;
+    return { sub: data.sub, ver: data.ver };
   } catch {
     return null;
   }
 }
 
-// ---- Cookie helpers (Next 15: cookies() is async) ----
-export async function getAdminSession(): Promise<{ sub: number } | null> {
-  const store = await cookies();
-  return verifySessionToken(store.get(SESSION_COOKIE)?.value);
+interface SessionVersionRow extends RowDataPacket {
+  session_version: number;
 }
 
-export async function setAdminCookie(adminId: number): Promise<void> {
+// ---- Cookie helpers (Next 15: cookies() is async) ----
+/**
+ * Sesi admin aktif, atau null. Selain tanda tangan & kedaluwarsa, versi sesi
+ * dicocokkan dengan DB: password diganti / akun dihapus → sesi tidak berlaku.
+ * Satu query per render (dibungkus `cache`, jadi layout + page cukup sekali).
+ * DB error / kolom belum ada → null (fail-closed), bukan diterima tanpa cek versi.
+ */
+export const getAdminSession = cache(async (): Promise<{ sub: number } | null> => {
   const store = await cookies();
-  store.set(SESSION_COOKIE, createSessionToken(adminId), {
+  const token = verifySessionToken(store.get(SESSION_COOKIE)?.value);
+  if (!token) return null;
+  try {
+    const rows = await query<SessionVersionRow[]>(
+      "SELECT session_version FROM admin_users WHERE id = ? LIMIT 1",
+      [token.sub]
+    );
+    if (rows.length === 0 || Number(rows[0].session_version) !== token.ver) return null;
+    return { sub: token.sub };
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    const hint = e.code === "ER_BAD_FIELD_ERROR" ? " — jalankan: npm run db:migrate:session" : "";
+    console.error("[auth] Gagal memeriksa versi sesi:", (e.code ?? e.message ?? "unknown") + hint);
+    return null;
+  }
+});
+
+export async function setAdminCookie(adminId: number, version: number): Promise<void> {
+  const store = await cookies();
+  store.set(SESSION_COOKIE, createSessionToken(adminId, version), {
     httpOnly: true,
     sameSite: "strict",
     path: "/",

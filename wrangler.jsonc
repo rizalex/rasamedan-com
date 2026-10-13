@@ -16,11 +16,22 @@
   "observability": {
     "enabled": true,
     "logs": {
-      // Log invocation mencatat URL request; GET /api/orders?phone=... (cek
-      // pesanan) memuat nomor HP pelanggan. Matikan agar data pribadi tidak
-      // tersimpan di log Cloudflare. console.error aplikasi tetap tercatat.
+      // Log invocation (URL tiap request) dimatikan: hemat & meminimalkan data
+      // pengunjung di log. Cek pesanan kini POST (nomor HP di body, bukan URL).
+      // console.error aplikasi tetap tercatat.
       "invocation_logs": false
     }
+  },
+  // Var non-rahasia runtime. Secret (ADMIN_SESSION_SECRET, TURNSTILE_SECRET_KEY)
+  // TIDAK di sini — pakai `wrangler secret put`.
+  "vars": {
+    // Request di Workers selalu lewat edge Cloudflare yang menimpa header ini,
+    // jadi aman dipercaya untuk rate limit (lib/client-ip.ts).
+    "TRUST_CF_CONNECTING_IP": "1",
+    // Site key Turnstile (publik). Diisi di sini, bukan di dashboard: `wrangler
+    // deploy` menimpa vars dashboard. Kosong = semua form captcha ditolak di
+    // production (fail-closed) — WAJIB diisi sebelum deploy.
+    "TURNSTILE_SITE_KEY": ""
   },
   // Pengaman: wrangler menjalankan ini sebelum bundling pada SETIAP `deploy`,
   // `versions upload`, dan `dev` — termasuk bila dipanggil langsung tanpa

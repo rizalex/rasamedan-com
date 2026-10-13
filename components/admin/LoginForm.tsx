@@ -1,92 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import CaptchaWidget, { type CaptchaHandle } from "@/components/security/CaptchaWidget";
+import { captchaErrorKey } from "@/lib/captcha-errors";
 import styles from "./admin.module.css";
 
-// Minimal typing untuk API grecaptcha yang dipakai.
-declare global {
-  interface Window {
-    grecaptcha?: {
-      render: (el: HTMLElement, opts: Record<string, unknown>) => number;
-      reset: (id?: number) => void;
-      getResponse: (id?: number) => string;
-    };
-  }
-}
-
-const SCRIPT_SRC = "https://www.google.com/recaptcha/api.js?render=explicit";
-
-export default function LoginForm({
-  recaptchaSiteKey,
-}: {
-  recaptchaSiteKey: string;
-}) {
+export default function LoginForm({ captchaSiteKey }: { captchaSiteKey: string }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState("");
-
-  const captchaRef = useRef<HTMLDivElement>(null);
-  const widgetId = useRef<number | null>(null);
-  const captchaEnabled = !!recaptchaSiteKey;
-
-  // Muat script Google & render widget (explicit render agar tidak balapan dgn React).
-  useEffect(() => {
-    if (!captchaEnabled) return;
-    let cancelled = false;
-
-    function tryRender() {
-      if (cancelled || widgetId.current !== null) return;
-      if (!window.grecaptcha?.render || !captchaRef.current) return;
-      widgetId.current = window.grecaptcha.render(captchaRef.current, {
-        sitekey: recaptchaSiteKey,
-        callback: (t: string) => setToken(t),
-        "expired-callback": () => setToken(""),
-        "error-callback": () => setToken(""),
-      });
-    }
-
-    if (
-      !document.querySelector(
-        'script[src^="https://www.google.com/recaptcha/api.js"]'
-      )
-    ) {
-      const s = document.createElement("script");
-      s.src = SCRIPT_SRC;
-      s.async = true;
-      s.defer = true;
-      document.head.appendChild(s);
-    }
-
-    const iv = setInterval(() => {
-      if (window.grecaptcha?.render) {
-        tryRender();
-        if (widgetId.current !== null) clearInterval(iv);
-      }
-    }, 200);
-
-    return () => {
-      cancelled = true;
-      clearInterval(iv);
-    };
-  }, [captchaEnabled, recaptchaSiteKey]);
-
-  function resetCaptcha() {
-    setToken("");
-    if (widgetId.current !== null && window.grecaptcha) {
-      window.grecaptcha.reset(widgetId.current);
-    }
-  }
+  const captcha = useRef<CaptchaHandle>(null);
+  const captchaEnabled = !!captchaSiteKey;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
     if (captchaEnabled && !token) {
-      setError("Mohon centang reCAPTCHA terlebih dahulu.");
+      setError(t("captcha.required"));
       return;
     }
 
@@ -95,12 +32,12 @@ export default function LoginForm({
       const res = await fetch("/api/admin/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, recaptchaToken: token }),
+        body: JSON.stringify({ username, password, captchaToken: token }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Gagal masuk");
-        resetCaptcha();
+        const key = captchaErrorKey(data.code);
+        setError(key ? t(key) : data.error ?? "Gagal masuk");
         setLoading(false);
         return;
       }
@@ -108,8 +45,10 @@ export default function LoginForm({
       router.refresh();
     } catch {
       setError("Terjadi kesalahan. Coba lagi.");
-      resetCaptcha();
       setLoading(false);
+    } finally {
+      // Token Turnstile sekali pakai — reset setelah setiap submit.
+      captcha.current?.reset();
     }
   }
 
@@ -135,9 +74,7 @@ export default function LoginForm({
         />
       </label>
 
-      {captchaEnabled && (
-        <div ref={captchaRef} className={styles.captcha} aria-label="reCAPTCHA" />
-      )}
+      <CaptchaWidget ref={captcha} siteKey={captchaSiteKey} action="login" onToken={setToken} />
 
       {error && <p className={styles.error}>{error}</p>}
       <button

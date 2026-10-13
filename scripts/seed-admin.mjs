@@ -53,10 +53,12 @@ try {
   }
   const password_hash = hashPassword(password);
   if (rows.length > 0) {
-    await conn.execute("UPDATE admin_users SET password_hash = ? WHERE username = ?", [
-      password_hash,
-      username,
-    ]);
+    // Naikkan session_version: reset password (mis. karena bocor) harus mencabut
+    // semua sesi yang ada, sama seperti ganti password dari halaman Pengaturan.
+    await conn.execute(
+      "UPDATE admin_users SET password_hash = ?, session_version = session_version + 1 WHERE username = ?",
+      [password_hash, username]
+    );
     console.log(`✅ Password admin "${username}" direset.`);
   } else {
     await conn.execute(

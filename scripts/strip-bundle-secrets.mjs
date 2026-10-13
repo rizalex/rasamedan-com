@@ -9,18 +9,18 @@
  * (allowlist). Rahasia runtime wajib datang dari `wrangler secret put`
  * (production) atau `.dev.vars` (lokal) — lihat CLAUDE.md §2.
  */
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
 const FILE = resolve(".open-next/cloudflare/next-env.mjs");
 
 // Non-rahasia yang boleh ikut ter-bundle. NEXT_PUBLIC_* memang sudah publik
-// (di-inline ke JS klien), sisanya site key/verifikasi yang tampil di HTML.
+// (di-inline ke JS klien). Site key captcha sengaja TIDAK diizinkan: nilai .env
+// lokal (sering test key) akan diam-diam terpakai di production bila var
+// production lupa diisi — isi lewat "vars" wrangler/dashboard.
 const isAllowed = (key) =>
   key.startsWith("NEXT_PUBLIC_") ||
-  key === "RECAPTCHA_SITE_KEY" ||
-  key === "TURNSTILE_SITE_KEY" ||
   key === "GOOGLE_SITE_VERIFICATION" ||
   key === "NODE_ENV";
 
@@ -42,6 +42,15 @@ for (const mode of ["production", "development", "test"]) {
   out += `export const ${mode} = ${JSON.stringify(kept)};\n`;
 }
 writeFileSync(FILE, out);
+
+// Salinan .env yang ditaruh OpenNext/Next di output (tidak ikut bundle Worker,
+// tapi berisi rahasia lokal) — hapus agar folder .open-next aman dibagikan/zip.
+for (const stray of [
+  ".open-next/server-functions/default/.env",
+  ".open-next/server-functions/default/.env.local",
+]) {
+  if (existsSync(stray)) rmSync(stray);
+}
 
 // Verifikasi: file hasil tidak boleh lagi memuat kunci yang dibuang.
 const check = readFileSync(FILE, "utf8");

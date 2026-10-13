@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import type { PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/promise";
 import { pool } from "@/lib/db";
 import type { CheckoutItem, FulfillmentMethod } from "@/lib/orders";
-import { verifyRecaptcha } from "@/lib/recaptcha";
+import { verifyCaptcha } from "@/lib/turnstile";
+import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
 import {
   checkRateLimit,
@@ -26,13 +27,6 @@ function tooManyOrders(retryAfterSec: number) {
 export const dynamic = "force-dynamic";
 
 type IncomingItem = { productId: number; variant: string | null; quantity: number };
-
-/** Alamat IP client (dari header X-Forwarded-For; Skill 26 menggantinya dengan cf-connecting-ip). */
-function getClientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "local";
-}
 
 /** Tanggal WIB (Asia/Jakarta) dalam format YYYYMMDD untuk Order ID. */
 function dateWibYYYYMMDD(): string {
@@ -72,132 +66,8 @@ function itemError(
   return NextResponse.json({ error, code, productId, variant }, { status: 409 });
 }
 
-interface OrderRow extends RowDataPacket {
-  id: number;
-  order_code: string;
-  recipient_name: string;
-  fulfillment_method: string;
-  status: string;
-  total_estimate: number | null;
-  created_at: Date;
-}
-
-interface OrderItemRow extends RowDataPacket {
-  order_id: number;
-  product_name: string;
-  variant: string | null;
-  quantity: number;
-  unit_price: number;
-}
-
-/**
- * GET /api/orders?phone=...&code=...
- * Cek status pesanan tanpa akun. `phone` WAJIB dan SELALU jadi filter — pelanggan
- * hanya bisa melihat pesanan milik nomor HP-nya sendiri (SKILLS.md Skill 8).
- * Semua parameter memakai parameterized query (aman dari SQL injection).
- */
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const phone = (url.searchParams.get("phone") ?? "").trim();
-  const code = (url.searchParams.get("code") ?? "").trim();
-  const recaptchaToken = (url.searchParams.get("captcha") ?? "").trim();
-  const ip = getClientIp(req);
-  const rlKey = `checkorder:${ip}`;
-
-  if (!phone) {
-    return NextResponse.json(
-      { error: "Nomor HP wajib diisi" },
-      { status: 400 }
-    );
-  }
-  // Format nomor dinormalisasi agar "0812-…", "+62 812…" dan "0812…" cocok.
-  // Format yang jelas salah ditolak SEBELUM rate limit (bukan tebakan nomor).
-  const phoneNorm = normalizePhone(phone);
-  if (!isValidPhone(phoneNorm) || code.length > 30) {
-    return NextResponse.json({ error: "Nomor HP tidak valid" }, { status: 400 });
-  }
-
-  // 1) Rate limit — cegah brute force enumerasi nomor HP / Order ID. Jatah
-  // diambil atomik di awal (sebelum `await` captcha) agar burst paralel tidak
-  // lolos; dikembalikan bila pesanan ditemukan atau terjadi error server.
-  const rl = consumeRateLimit(rlKey);
-  if (rl.limited) {
-    const mins = Math.ceil(rl.retryAfterSec / 60);
-    return NextResponse.json(
-      { error: `Terlalu banyak percobaan. Coba lagi dalam ${mins} menit.` },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
-    );
-  }
-
-  // 2) Verifikasi reCAPTCHA SEBELUM query DB (dilewati bila key tidak dikonfigurasi).
-  const captcha = await verifyRecaptcha(recaptchaToken, ip);
-  if (!captcha.ok) {
-    return NextResponse.json({ error: captcha.error }, { status: 400 });
-  }
-
-  let refunded = false;
-  try {
-    // phone selalu difilter; code opsional sebagai filter tambahan (bukan pengganti).
-    // Cocokkan format ternormalisasi (pesanan baru) DAN input apa adanya (pesanan
-    // lama yang tersimpan sebelum normalisasi diterapkan).
-    const params: (string | number)[] = [phoneNorm, phone];
-    let sql =
-      "SELECT id, order_code, recipient_name, fulfillment_method, status, total_estimate, created_at FROM orders WHERE phone IN (?, ?)";
-    if (code) {
-      sql += " AND order_code = ?";
-      params.push(code);
-    }
-    sql += " ORDER BY created_at DESC LIMIT 50";
-
-    // execute (prepared): pada error, `err.sql` tidak memuat nomor HP.
-    const [orders] = await pool.execute<OrderRow[]>(sql, params);
-    if (orders.length === 0) {
-      // Jatah tetap terpakai (kemungkinan menebak nomor/kode).
-      return NextResponse.json({ orders: [] });
-    }
-    // Pencarian valid → kembalikan jatah pencarian ini saja (bukan reset), agar
-    // tebakan gagal sebelumnya tetap terhitung — mencegah bypass dengan menyelipkan
-    // pencarian nomor sendiri di antara tebakan nomor orang lain.
-    refundRateLimit(rlKey, rl.stamp);
-    refunded = true;
-
-    const ids = orders.map((o) => o.id);
-    const [items] = await pool.execute<OrderItemRow[]>(
-      `SELECT order_id, product_name, variant, quantity, unit_price FROM order_items
-        WHERE order_id IN (${ids.map(() => "?").join(", ")})`,
-      ids
-    );
-
-    const result = orders.map((o) => ({
-      order_code: o.order_code,
-      recipient_name: o.recipient_name,
-      fulfillment_method: o.fulfillment_method,
-      status: o.status,
-      total_estimate: o.total_estimate,
-      created_at: o.created_at,
-      items: items
-        .filter((it) => it.order_id === o.id)
-        .map((it) => ({
-          product_name: it.product_name,
-          variant: it.variant,
-          quantity: it.quantity,
-          unit_price: it.unit_price,
-        })),
-    }));
-
-    return NextResponse.json({ orders: result });
-  } catch (err) {
-    if (!refunded) refundRateLimit(rlKey, rl.stamp);
-    // Jangan log objek error mentah: `err.sql` dari pool.query() memuat nomor HP
-    // pelanggan (nilai parameter sudah disisipkan ke teks SQL) → PII di log.
-    const e = err as { code?: string; message?: string };
-    console.error("GET /api/orders gagal:", e.code ?? e.message ?? "unknown");
-    return NextResponse.json(
-      { error: "Gagal mengambil data pesanan" },
-      { status: 500 }
-    );
-  }
-}
+// Cek status pesanan dipindah ke POST /api/orders/lookup (Skill 21): nomor HP
+// tidak lagi masuk URL/log. GET pada route ini sengaja tidak ada (405).
 
 export async function POST(req: Request) {
   // Hanya JSON: form lintas situs (enctype text/plain) tidak memicu preflight
@@ -222,12 +92,13 @@ export async function POST(req: Request) {
   const locationNote = body.location_note ? String(body.location_note).trim() : null;
   const note = body.note ? String(body.note).trim() : null;
   const rawItems = Array.isArray(body.items) ? (body.items as IncomingItem[]) : [];
-  const captchaToken = String(body.captcha ?? "").trim();
+  const captchaToken = String(body.captchaToken ?? "").trim();
   const ip = getClientIp(req);
+  const ipKey = rateLimitKeyFromIp(ip);
   // Dua kunci terpisah: kuota pesanan sukses, dan kegagalan captcha (batas lebih
   // longgar) — agar token sampah tidak bisa mengunci checkout pelanggan asli.
-  const orderKey = `order:${ip}`;
-  const captchaKey = `ordercaptcha:${ip}`;
+  const orderKey = `order:${ipKey}`;
+  const captchaKey = `ordercaptcha:${ipKey}`;
 
   // 1) Rate limit — tolak cepat sebelum kerja lain.
   const orderRl = checkRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
@@ -237,10 +108,13 @@ export async function POST(req: Request) {
   const captchaRl = consumeRateLimit(captchaKey, CAPTCHA_FAIL_LIMIT, ORDER_WINDOW_MS);
   if (captchaRl.limited) return tooManyOrders(captchaRl.retryAfterSec);
 
-  // 2) Verifikasi captcha SEBELUM kerja lain (dilewati bila key tidak dikonfigurasi).
-  const captcha = await verifyRecaptcha(captchaToken, ip);
+  // 2) Verifikasi Turnstile SEBELUM kerja lain. Error dikirim sebagai kode agar
+  // klien menampilkannya sesuai bahasa aktif.
+  const captcha = await verifyCaptcha(captchaToken, ip, "checkout");
   if (!captcha.ok) {
-    return NextResponse.json({ error: captcha.error }, { status: 400 });
+    // 503 = salah konfigurasi server (bukan ulah klien) → jatah dikembalikan.
+    if (captcha.status === 503) refundRateLimit(captchaKey, captchaRl.stamp);
+    return NextResponse.json({ error: captcha.code, code: captcha.code }, { status: captcha.status });
   }
   refundRateLimit(captchaKey, captchaRl.stamp);
 

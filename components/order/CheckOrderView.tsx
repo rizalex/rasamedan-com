@@ -1,24 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import StatusBadge, { type OrderStatus } from "@/components/order/StatusBadge";
 import { formatRupiah, formatDateTime } from "@/lib/format";
 import { IconSearch } from "@/components/ui/icons";
+import CaptchaWidget, { type CaptchaHandle } from "@/components/security/CaptchaWidget";
+import { captchaErrorKey } from "@/lib/captcha-errors";
 import styles from "./CheckOrderView.module.css";
-
-// Minimal typing untuk API grecaptcha yang dipakai.
-declare global {
-  interface Window {
-    grecaptcha?: {
-      render: (el: HTMLElement, opts: Record<string, unknown>) => number;
-      reset: (id?: number) => void;
-      getResponse: (id?: number) => string;
-    };
-  }
-}
-
-const SCRIPT_SRC = "https://www.google.com/recaptcha/api.js?render=explicit";
 
 type LookupItem = {
   product_name: string;
@@ -36,11 +25,7 @@ type LookupOrder = {
   items: LookupItem[];
 };
 
-export default function CheckOrderView({
-  recaptchaSiteKey,
-}: {
-  recaptchaSiteKey: string;
-}) {
+export default function CheckOrderView({ captchaSiteKey }: { captchaSiteKey: string }) {
   const { t, locale } = useI18n();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -49,57 +34,8 @@ export default function CheckOrderView({
   const [orders, setOrders] = useState<LookupOrder[] | null>(null);
   const [token, setToken] = useState("");
 
-  const captchaRef = useRef<HTMLDivElement>(null);
-  const widgetId = useRef<number | null>(null);
-  const captchaEnabled = !!recaptchaSiteKey;
-
-  // Muat script Google & render widget (explicit render agar tidak balapan dgn React).
-  useEffect(() => {
-    if (!captchaEnabled) return;
-    let cancelled = false;
-
-    function tryRender() {
-      if (cancelled || widgetId.current !== null) return;
-      if (!window.grecaptcha?.render || !captchaRef.current) return;
-      widgetId.current = window.grecaptcha.render(captchaRef.current, {
-        sitekey: recaptchaSiteKey,
-        callback: (tok: string) => setToken(tok),
-        "expired-callback": () => setToken(""),
-        "error-callback": () => setToken(""),
-      });
-    }
-
-    if (
-      !document.querySelector(
-        'script[src^="https://www.google.com/recaptcha/api.js"]'
-      )
-    ) {
-      const s = document.createElement("script");
-      s.src = SCRIPT_SRC;
-      s.async = true;
-      s.defer = true;
-      document.head.appendChild(s);
-    }
-
-    const iv = setInterval(() => {
-      if (window.grecaptcha?.render) {
-        tryRender();
-        if (widgetId.current !== null) clearInterval(iv);
-      }
-    }, 200);
-
-    return () => {
-      cancelled = true;
-      clearInterval(iv);
-    };
-  }, [captchaEnabled, recaptchaSiteKey]);
-
-  function resetCaptcha() {
-    setToken("");
-    if (widgetId.current !== null && window.grecaptcha) {
-      window.grecaptcha.reset(widgetId.current);
-    }
-  }
+  const captcha = useRef<CaptchaHandle>(null);
+  const captchaEnabled = !!captchaSiteKey;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -109,19 +45,22 @@ export default function CheckOrderView({
       return;
     }
     if (captchaEnabled && !token) {
-      setError(t("checkOrder.errCaptcha"));
+      setError(t("captcha.required"));
       return;
     }
     setLoading(true);
     setOrders(null);
     try {
-      const qs = new URLSearchParams({ phone: phone.trim() });
-      if (code.trim()) qs.set("code", code.trim());
-      if (token) qs.set("captcha", token);
-      const res = await fetch(`/api/orders?${qs.toString()}`);
+      // POST: nomor HP & token tidak masuk URL/riwayat browser/log (Skill 21).
+      const res = await fetch("/api/orders/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.trim(), code: code.trim(), captchaToken: token }),
+      });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? t("checkOrder.errGeneric"));
+        const key = captchaErrorKey(data.code);
+        setError(key ? t(key) : data.error ?? t("checkOrder.errGeneric"));
       } else {
         setOrders(data.orders);
       }
@@ -129,8 +68,8 @@ export default function CheckOrderView({
       setError(t("checkOrder.errGeneric"));
     } finally {
       setLoading(false);
-      // Token reCAPTCHA v2 sekali pakai — reset agar pencarian berikutnya valid.
-      if (captchaEnabled) resetCaptcha();
+      // Token Turnstile sekali pakai — reset agar pencarian berikutnya valid.
+      captcha.current?.reset();
     }
   }
 
@@ -159,13 +98,12 @@ export default function CheckOrderView({
             placeholder="ORD-20260707-0001"
           />
         </label>
-        {captchaEnabled && (
-          <div
-            ref={captchaRef}
-            className={styles.captcha}
-            aria-label="reCAPTCHA"
-          />
-        )}
+        <CaptchaWidget
+          ref={captcha}
+          siteKey={captchaSiteKey}
+          action="check-order"
+          onToken={setToken}
+        />
         <button type="submit" className={styles.submit} disabled={loading}>
           <IconSearch size={17} />
           {loading ? t("checkOrder.searching") : t("checkOrder.search")}

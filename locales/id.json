@@ -82,7 +82,6 @@
     "errRequired": "Nama dan nomor HP wajib diisi.",
     "errAddress": "Alamat dan kecamatan/kota wajib diisi untuk pengiriman kurir.",
     "errGeneric": "Terjadi kesalahan. Silakan coba lagi.",
-    "errCaptcha": "Mohon selesaikan verifikasi keamanan terlebih dahulu.",
     "successTitle": "Pesanan dibuat!",
     "successMsg": "Kami membuka WhatsApp agar Anda bisa mengirim pesanan ke pemilik. Simpan Order ID untuk cek status.",
     "orderId": "Order ID",
@@ -107,7 +106,6 @@
     "searching": "Mencari...",
     "noResults": "Tidak ada pesanan ditemukan untuk data tersebut.",
     "errPhone": "Nomor HP wajib diisi.",
-    "errCaptcha": "Mohon centang reCAPTCHA terlebih dahulu.",
     "errGeneric": "Terjadi kesalahan. Silakan coba lagi."
   },
   "categories": {
@@ -182,5 +180,10 @@
     "title": "Halaman sedang tidak dapat dimuat",
     "message": "Maaf, terjadi gangguan sementara. Silakan coba lagi beberapa saat lagi, atau hubungi kami via WhatsApp.",
     "retry": "Coba lagi"
+  },
+  "captcha": {
+    "required": "Mohon selesaikan verifikasi keamanan terlebih dahulu.",
+    "failed": "Verifikasi keamanan gagal atau kedaluwarsa. Silakan ulangi.",
+    "unavailable": "Verifikasi keamanan sedang tidak tersedia. Coba lagi nanti."
   }
 }

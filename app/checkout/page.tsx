@@ -3,7 +3,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import CheckoutView from "@/components/checkout/CheckoutView";
 import { buildMetadata } from "@/lib/seo";
-import { getRecaptchaSiteKey } from "@/lib/recaptcha";
+import { getCaptchaSiteKey } from "@/lib/turnstile";
 
 // Halaman transaksional: noindex.
 export const metadata: Metadata = buildMetadata({
@@ -21,7 +21,7 @@ export default function CheckoutPage() {
   return (
     <>
       <Header />
-      <CheckoutView recaptchaSiteKey={getRecaptchaSiteKey()} />
+      <CheckoutView captchaSiteKey={getCaptchaSiteKey()} />
       <Footer />
     </>
   );

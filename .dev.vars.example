@@ -15,9 +15,13 @@ DB_USER=
 DB_PASS=
 DB_NAME=
 
-# Captcha — reCAPTCHA sementara; diganti Turnstile di Skill 28.
-RECAPTCHA_SITE_KEY=
-RECAPTCHA_SECRET_KEY=
+# Cloudflare Turnstile. Untuk preview lokal boleh test key resmi
+#   site 1x00000000000000000000AA / secret 1x0000000000000000000000000000000AA
+# ditambah ALLOW_TEST_CAPTCHA=1 (preview berjalan sebagai production; tanpa flag ini
+# test key ditolak). JANGAN pernah set ALLOW_TEST_CAPTCHA di Workers production.
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+ALLOW_TEST_CAPTCHA=
 
 # Opsional: meta verifikasi Google Search Console.
 GOOGLE_SITE_VERIFICATION=

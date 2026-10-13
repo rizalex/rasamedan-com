@@ -1,0 +1,5 @@
+/* Tinggi widget Turnstile ±65px — dicadangkan agar tata letak tidak bergeser. */
+.widget {
+  min-height: 65px;
+  width: 100%;
+}

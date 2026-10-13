@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   username      VARCHAR(50)  NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
+  session_version INT UNSIGNED NOT NULL DEFAULT 0,  -- naik saat ganti password → sesi lama gugur (Skill 21.2 no. 5)
   created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_admin_username (username)

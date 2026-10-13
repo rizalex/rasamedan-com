@@ -8,6 +8,7 @@ const STOCK = ["tersedia", "terbatas", "pre-order", "tanya-stok"];
 const MAX_VARIANTS = 20;
 const MAX_PRICE_DELTA = 100_000_000;
 const MAX_VARIANT_WEIGHT = 100_000;
+const LOCAL_IMAGE = /^\/(uploads|images)\/[A-Za-z0-9._\/-]{1,200}$/;
 
 export type ProductInput = {
   name: string;
@@ -97,6 +98,13 @@ export function validateProductInput(
   const variants = validateVariants(body.variants, price);
   if (!variants.ok) return variants;
 
+  // Foto hanya boleh path lokal hasil upload/aset (bukan URL eksternal atau
+  // `javascript:`): sejalan dengan CSP img-src 'self' (Skill 21.2 no. 8).
+  const image = body.image ? String(body.image).trim() : "";
+  if (image && (!LOCAL_IMAGE.test(image) || image.includes(".."))) {
+    return { ok: false, error: "Path foto tidak valid (harus dari /uploads/ atau /images/)" };
+  }
+
   return {
     ok: true,
     value: {
@@ -111,7 +119,7 @@ export function validateProductInput(
       is_featured: Boolean(body.is_featured),
       description: body.description ? String(body.description) : null,
       ingredients: body.ingredients ? String(body.ingredients) : null,
-      image: body.image ? String(body.image) : null,
+      image: image || null,
       variants: variants.value,
     },
   };

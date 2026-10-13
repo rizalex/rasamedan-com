@@ -2,6 +2,7 @@
 ## Panduan Deploy "Rasa Medan" ke cPanel (Node.js App / Passenger)
 
 > ⚠️ **Status (Skill 23, 13 Okt 2026):** aplikasi sedang dimigrasi ke Cloudflare Workers. `server.js` sudah dihapus dari `main`, jadi langkah deploy untuk cPanel di bawah **tidak lagi berlaku untuk `main`**. Hotfix cPanel darurat: checkout commit `fb4ea12`. Dokumen ini ditulis ulang untuk Cloudflare di Skill 29.
+> **Jangan jalankan `main` (Skill 21 ke atas) di cPanel/`next start` publik:** IP klien hanya dipercaya dari edge Cloudflare (`TRUST_CF_CONNECTING_IP`), sehingga di luar Workers semua pengunjung berbagi satu ember rate limit (satu penyerang bisa mengunci login/cek pesanan untuk semua orang).
 
 Stack: Next.js (App Router) + MySQL. Semua dependency pure-JS (mysql2) atau
 bawaan Node (crypto) — **tidak ada native binary yang perlu di-compile** di
@@ -25,6 +26,9 @@ shared hosting. Optimasi gambar Next dimatikan (tanpa `sharp`).
    Kue/Kering/Sirup), `products`, `product_variants`, `orders`, `order_items`,
    `admin_users`.
    - Alternatif via SSH: `npm run db:schema` (butuh `.env` terisi).
+   - **DB lama (sebelum 13 Okt 2026):** jalankan `npm run db:migrate:session` —
+     tanpa kolom `admin_users.session_version` login admin ditolak (fail-closed).
+     Semua admin perlu login ulang sekali setelah update.
 4. (Opsional) Isi data awal produk: `npm run seed` — memasukkan 9 produk contoh
    dari `data/dummy-products.json`. Lewati jika ingin mulai dari kosong.
    Seed menolak jalan bila tabel produk sudah berisi (cegah katalog asli terhapus);
@@ -49,13 +53,14 @@ Salin `.env.example` menjadi `.env` dan isi (atau masukkan langsung ke panel
 | `DB_HOST` `DB_PORT` `DB_USER` `DB_PASS` `DB_NAME` | Kredensial MySQL dari langkah 2 |
 | `NEXT_PUBLIC_WA_NUMBER` | Nomor WA UTAMA (khusus pemesanan), format internasional tanpa `+` (mis. `6281234567890`) |
 | `NEXT_PUBLIC_WA_NUMBER_ALT` | Nomor WA ALTERNATIF untuk layanan pelanggan/pertanyaan umum (opsional; kosongkan bila tak dipakai) |
-| `ADMIN_SESSION_SECRET` | String acak panjang (mis. hasil `openssl rand -hex 32`) |
-| `RECAPTCHA_SITE_KEY` `RECAPTCHA_SECRET_KEY` | Kunci Google reCAPTCHA v2 checkbox (daftar di https://www.google.com/recaptcha/admin). Isi **keduanya** untuk mengaktifkan proteksi login admin; kosongkan keduanya untuk menonaktifkan. |
+| `ADMIN_SESSION_SECRET` | String acak panjang (mis. hasil `openssl rand -hex 32`). **Wajib dirotasi** — nilai lama pernah ter-commit (Skill 21.2 no. 1). Ganti di SEMUA lokasi: (1) panel Node.js App cPanel yang masih live lalu restart, (2) `npx wrangler secret put ADMIN_SESSION_SECRET` untuk Workers, (3) `.env` lokal. Nilai yang bocor ditolak aplikasi versi baru, tetapi kode lama di cPanel masih menerimanya. |
+| `TURNSTILE_SITE_KEY` `TURNSTILE_SECRET_KEY` | Kunci Cloudflare Turnstile (dash.cloudflare.com → Turnstile → Add widget, mode *Managed*; hostname = domain production, plus `*.workers.dev` bila dipakai untuk staging). **Wajib di production** — tanpa secret, login/cek pesanan/checkout ditolak. Test key `1x…` ditolak di production (kecuali `ALLOW_TEST_CAPTCHA=1` di `.dev.vars` untuk preview lokal — jangan pernah di Workers). Key asli butuh `NEXT_PUBLIC_SITE_URL` https yang benar saat build. |
 | `NODE_ENV` | `production` |
 
-> **Keamanan login admin (Skill 15):** reCAPTCHA aktif otomatis bila kedua key di
-> atas diisi. Tanpa key, form login tetap berfungsi tanpa reCAPTCHA. Login juga
-> dibatasi rate-limit (maks 5 gagal / 15 menit per IP → terkunci sementara), dan
+> **Keamanan (Skill 15 & 21):** Turnstile wajib di production untuk login admin,
+> cek pesanan, dan checkout (fail-closed). Server juga memastikan hostname token
+> sama dengan `NEXT_PUBLIC_SITE_URL` — build staging workers.dev harus memakai URL
+> workers.dev itu. Login juga dibatasi rate-limit (maks 5 gagal / 15 menit per IP → terkunci sementara), dan
 > cookie sesi memakai `httpOnly` + `sameSite=strict` + `secure` (butuh HTTPS).
 
 ---

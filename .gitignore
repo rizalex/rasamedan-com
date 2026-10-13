@@ -37,3 +37,6 @@ Thumbs.db
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
+
+# Pengaturan lokal Claude Code per mesin (izin pribadi) — jangan di-commit
+.claude/settings.local.json

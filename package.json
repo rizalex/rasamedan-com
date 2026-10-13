@@ -16,9 +16,10 @@
     "seed:categories": "node --env-file=.env scripts/seed-categories.mjs",
     "seed:admin": "node --env-file=.env scripts/seed-admin.mjs",
     "preview": "npm run cf:build && opennextjs-cloudflare preview",
-    "deploy": "npm run cf:build && opennextjs-cloudflare deploy",
+    "deploy": "node scripts/check-deploy-env.mjs && npm run cf:build && opennextjs-cloudflare deploy",
     "cf:dryrun": "npm run cf:build && wrangler deploy --dry-run --outdir .wrangler/dry-run",
-    "cf:build": "opennextjs-cloudflare build && node scripts/strip-bundle-secrets.mjs"
+    "cf:build": "opennextjs-cloudflare build && node scripts/strip-bundle-secrets.mjs",
+    "db:migrate:session": "node --env-file=.env scripts/migrate-session-version.mjs"
   },
   "dependencies": {
     "mysql2": "^3.11.5",

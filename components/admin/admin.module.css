@@ -312,10 +312,6 @@
   outline: none;
   border-color: var(--color-primary);
 }
-/* Wadah widget reCAPTCHA (tinggi standar 78px untuk kurangi layout shift) */
-.captcha {
-  min-height: 78px;
-}
 .grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;

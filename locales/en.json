@@ -82,7 +82,6 @@
     "errRequired": "Name and phone number are required.",
     "errAddress": "Address and district/city are required for courier delivery.",
     "errGeneric": "Something went wrong. Please try again.",
-    "errCaptcha": "Please complete the security check first.",
     "successTitle": "Order created!",
     "successMsg": "We're opening WhatsApp so you can send your order to the owner. Save your Order ID to track status.",
     "orderId": "Order ID",
@@ -107,7 +106,6 @@
     "searching": "Searching...",
     "noResults": "No orders found for that information.",
     "errPhone": "Phone number is required.",
-    "errCaptcha": "Please complete the reCAPTCHA first.",
     "errGeneric": "Something went wrong. Please try again."
   },
   "categories": {
@@ -182,5 +180,10 @@
     "title": "This page can't be loaded right now",
     "message": "Sorry, there's a temporary problem. Please try again shortly, or contact us via WhatsApp.",
     "retry": "Try again"
+  },
+  "captcha": {
+    "required": "Please complete the security check first.",
+    "failed": "The security check failed or expired. Please try again.",
+    "unavailable": "The security check is temporarily unavailable. Please try again later."
   }
 }

@@ -31,7 +31,7 @@ Aturan kritis: tanpa akun pelanggan, tanpa payment gateway, tanpa hitung ongkir 
 | Framework | Next.js 15 (App Router) + React 19, TypeScript |
 | Styling | CSS murni / CSS Modules, mobile-first, CSS variables |
 | DB | MySQL via `mysql2/promise` pool (`lib/db.ts`), parameterized query |
-| Auth admin | Session cookie HttpOnly ber-HMAC-SHA256 (`lib/auth.ts`, `node:crypto` scrypt, 8 jam), reCAPTCHA v2 + rate-limit 5 gagal/15 mnt |
+| Auth admin | Session cookie HttpOnly ber-HMAC-SHA256 (`lib/auth.ts`, `node:crypto` scrypt, 8 jam), sesi dicabut via `session_version` saat ganti password; Cloudflare Turnstile (login, cek pesanan, checkout; fail-closed di production) + rate-limit 5 gagal/15 mnt; header keamanan + CSP (`next.config.mjs`) |
 | i18n | `I18nProvider` + `locales/id.json`, `locales/en.json` (default `id`; nama/deskripsi produk tetap id) |
 | WA | `lib/whatsapp.ts` → `https://wa.me/<nomor>?text=<encoded>` |
 | SEO | `lib/seo.ts` (canonical, OG/Twitter, hreflang id/en, JSON-LD Product/LocalBusiness/Breadcrumb), `app/sitemap.ts`, `app/robots.ts` |
@@ -66,7 +66,7 @@ components/
   admin/AdminNav, ProductForm, CategoryManager, OrderStatusSelect, LoginForm, AccountSettingsForm
   seo/JsonLd
 lib/ db, products, product-admin, categories, orders, orders-db,
-     auth, rate-limit, recaptcha, whatsapp, store, seo, format, slug, i18n
+     auth, rate-limit, turnstile, client-ip, image-type, pricing, phone, whatsapp, store, seo, format, slug, i18n
 db/schema.sql · data/dummy-products.json · data/site-info.json
 locales/id.json · locales/en.json
 public/uploads/ (foto produk, writable) · public/images/ (logo, hero, ornamen)
@@ -93,6 +93,7 @@ npm install
 cp .env.example .env   # isi kredensial (jangan commit .env)
 npm run db:test        # tes koneksi MySQL
 npm run db:schema      # import schema
+npm run db:migrate:session  # DB lama: tambah admin_users.session_version (wajib, idempoten)
 npm run seed           # 9 produk dummy (tolak bila produk sudah ada; --force untuk timpa)
 ADMIN_USERNAME=admin ADMIN_PASSWORD=<kuat> npm run seed:admin
 npm run dev            # http://localhost:3000
@@ -108,7 +109,7 @@ Build/prod check (wajib lolos sebelum deploy cPanel): `npm run build && npm star
 | `NEXT_PUBLIC_WA_NUMBER` | WA utama pemesanan, tanpa `+` (dev: dummy `62812...`) |
 | `NEXT_PUBLIC_WA_NUMBER_ALT` | WA alternatif layanan umum (opsional) |
 | `ADMIN_SESSION_SECRET` | Secret HMAC sesi (acak panjang) |
-| `RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY` | reCAPTCHA v2; kosong = login tanpa captcha |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile. Dev: kosong = captcha dilewati (atau test key `1x…`). Production: wajib key asli — tanpa secret request ditolak; site key lewat `vars` wrangler, secret lewat `wrangler secret put` |
 | `NEXT_PUBLIC_SITE_URL` | Canonical/OG/sitemap (wajib domain asli saat live, tanpa trailing slash) |
 | `NEXT_PUBLIC_STORE_NAME/ADDRESS/MAPS_EMBED_URL/MAPS_LINK_URL/STORE_HOURS_WEEKDAY/WEEKEND/IG_URL/TIKTOK_URL/FB_URL` | Lokasi toko & kontak (Skill 18) |
 | `GOOGLE_SITE_VERIFICATION` | Token Search Console (opsional) |

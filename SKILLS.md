@@ -32,13 +32,13 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 1–12 | MVP: setup & DB, dummy, beranda, katalog, detail, cart, checkout+WA, cek pesanan, admin, i18n, halaman pendukung, deploy | ✅ Selesai |
 | 13 | Berat produk & info ongkir manual | ✅ Selesai — berat per varian kini bisa diisi dari admin (Skill 20.4) |
 | 14 | Kategori dinamis | ✅ Selesai |
-| 15 | Captcha (Turnstile) & hardening login | ⚠️ Dokumen sudah Turnstile; kode di repo masih reCAPTCHA |
-| 16 | Pengaturan akun admin | ⚠️ Jalan; sesi di perangkat lain tidak ikut dicabut (Skill 21.2 no. 5) |
+| 15 | Captcha (Turnstile) & hardening login | ✅ Turnstile di login, cek pesanan, checkout (Skill 21); fail-closed di production. AC "diuji di server" diganti: diuji di Workers saat deploy (21.3) |
+| 16 | Pengaturan akun admin | ✅ Ganti password mencabut sesi di semua perangkat (`session_version`, Skill 21) |
 | 17 | Redesign visual | ✅ Palet diterapkan; kesesuaian dengan mockup belum diverifikasi di browser |
 | 18 | Lokasi toko & info kontak | ✅ Selesai |
 | 19 | SEO & Google indexing | ⚠️ Kode selesai; hero dikompres 9 MB → 188 KB WebP + OG JPEG 145 KB (20.4). JSON-LD kini AggregateOffer untuk harga varian. 19.8 dikerjakan pemilik |
 | 20 | Code review (gerbang kualitas) | ✅ Audit penuh 20.2 (13 Okt 2026): 5 Penting + 9 Minor diperbaiki; 20.3 lolos (tsc, build, lint ESLint baru, tanpa file _tmp); backlog 20.4 selesai kecuali tugas pemilik (ganti foto hero). Tetap berulang per skill |
-| 21 | Security review & hardening | ⚠️ 21.2 no. 2 selesai (secret bocor/placeholder ditolak via blocklist hash; `server.js` fail-fast). No. 1 tinggal **rotasi secret oleh pemilik** (`.env` lokal masih nilai bocor → kini ditolak). No. 3 jalan: rate limit atomik (login, cek pesanan, checkout), batas input/item/total, validasi varian; captcha checkout masih reCAPTCHA → Turnstile di Skill 28. No. 4–10 terbuka. Ditunda ke no. 4: kunci rate limit jadi `local` bila proxy tidak mengirim header IP (cek di server dulu); urutan `order_code` > 9999/hari |
+| 21 | Security review & hardening | ✅ 21.2 no. 1–10 dikerjakan (13 Okt 2026, rincian di 21.2a); checklist 21.3 versi Cloudflare. ⏳ Pemilik: rotasi `ADMIN_SESSION_SECRET` di cPanel yang masih live + Workers, ganti password admin lama. Tetap berulang per skill (21.1) |
 | 22 | Lacak pengiriman via api.co.id | 🆕 Rancangan; menunggu verifikasi 22.0 |
 | 23 | Setup runtime Cloudflare Workers | ✅ Kode selesai (OpenNext build + preview lokal lolos, bundle 1,4 MiB gzip, secret .env disaring dari bundle). Deploy uji ke workers.dev menunggu pemilik (`wrangler login`, rotasi secret, `NEXT_PUBLIC_SITE_URL`) |
 | 24–30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
@@ -585,15 +585,33 @@ transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-
 9. **[Rendah] Kebersihan repo.** Hapus `scripts/_tmp_dbtest.mjs` dari git. Tambahkan `.claude/settings.local.json` ke `.gitignore`, lalu keluarkan dari git dengan `git rm --cached`.
 10. **[Rendah] Password admin default** (`admin123` dari `npm run seed:admin`) wajib diganti sebelum go-live. *(13 Okt 2026: `seed:admin` kini menolak jalan tanpa `ADMIN_PASSWORD` ≥ 12 karakter dan tidak menimpa akun yang ada — akun BARU tidak bisa lagi dibuat dengan password default. Akun lama yang terlanjur memakai `admin123` tetap harus diganti pemilik.)*
 
-### 21.3 Checklist pre-deploy (isi setiap kali deploy)
+### 21.2a Status pengerjaan (13 Okt 2026)
+| No. | Status |
+|---|---|
+| 1 | ✅ Kode: `.env.example` kosong, nilai bocor ditolak (blocklist hash), fail-closed di production; `.env` lokal sudah dirotasi. ⏳ **Pemilik:** rotasi di panel cPanel yang masih live (kode lama di sana masih menerima nilai bocor) + `wrangler secret put ADMIN_SESSION_SECRET` |
+| 2 | ✅ |
+| 3 | ✅ Rate limit atomik, batas input/item/total, varian wajib, JSON-only (415), **Turnstile** di checkout, login, dan cek pesanan (menutup Skill 15). Cek pesanan pindah ke `POST /api/orders/lookup` (nomor HP tidak lagi di URL/log) |
+| 4 | ✅ `lib/client-ip.ts`: `cf-connecting-ip` dipercaya di production hanya bila `TRUST_CF_CONNECTING_IP=1` (var di `wrangler.jsonc` — di Workers header ditimpa edge; `next start` terbuka tanpa Cloudflare tidak memercayainya); IPv4-mapped IPv6 dinormalisasi; XFF tidak pernah dipercaya di production (dev: entri paling kanan); IPv6 dikelompokkan per /64; tanpa IP → ember bersama `noip` (lebih ketat). Analisis proxy cPanel tidak relevan lagi (`main` tidak deploy ke cPanel) |
+| 5 | ✅ `admin_users.session_version` (schema + `npm run db:migrate:session`), dicek di `getAdminSession()` per request, naik atomik saat ganti password. Kolom belum ada → admin ditolak (fail-closed). Bukan pengganti rotasi secret |
+| 6 | ✅ Magic bytes (`lib/image-type.ts`), ekstensi & nama file dari server. `.htaccess` **tidak dikerjakan** (keputusan tercatat): `main` tidak deploy ke cPanel, aset Workers/R2 tidak pernah dieksekusi, dan upload hanya bisa menghasilkan jpg/png/webp/gif. Field `image` produk kini dibatasi ke `/uploads/` & `/images/` |
+| 7 | ✅ (Skill 20) |
+| 8 | ✅ `next.config.mjs`: CSP (Turnstile + iframe peta; `'unsafe-inline'` karena tanpa middleware/nonce), nosniff, Referrer-Policy, X-Frame-Options DENY, Permissions-Policy. HSTS diatur di dashboard Cloudflare saat cutover |
+| 9 | ✅ `_tmp_dbtest.mjs` dihapus (Skill 20); `.claude/settings.local.json` di-ignore & keluar dari git |
+| 10 | ✅ Kode: `seed:admin` wajib `ADMIN_PASSWORD` ≥ 12. ⏳ **Pemilik:** ganti password akun lama bila masih default |
+
+Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal antar-isolate Workers → tabel D1 (Skill 28); hashing scrypt → PBKDF2 (Skill 26); upload ke R2 (Skill 27).
+
+### 21.3 Checklist pre-deploy Cloudflare Workers (isi setiap kali deploy)
 - [ ] Audit penuh `security-auditor`: tidak ada temuan Kritis/Tinggi yang masih terbuka
-- [ ] Secret sesi production unik, ≥32 karakter, dan tidak pernah ter-commit
-- [ ] Turnstile aktif dengan key production (bukan test key) dan sudah diuji di server
-- [ ] SSL aktif, dan `NEXT_PUBLIC_SITE_URL` berisi domain https yang asli
+- [ ] `ADMIN_SESSION_SECRET` via `wrangler secret put`, ≥32 karakter acak, belum pernah ter-commit, berbeda dari dev
+- [ ] `TURNSTILE_SECRET_KEY` via `wrangler secret put` + `TURNSTILE_SITE_KEY` di `vars` `wrangler.jsonc`, bukan test key; hostname widget = domain production (+ workers.dev bila staging); `ALLOW_TEST_CAPTCHA` TIDAK diset; login, cek pesanan, checkout diuji di URL deploy
+- [ ] `NEXT_PUBLIC_SITE_URL` = domain https asli **saat build** (`npm run deploy` otomatis menolak localhost/http/site key kosong lewat `scripts/check-deploy-env.mjs`); `npm run cf:build` menampilkan `[strip-bundle-secrets] OK`
+- [ ] Migrasi DB terbaru diterapkan (sekarang `db:migrate:session`; setelah Skill 24 `wrangler d1 migrations apply --remote`)
 - [ ] Password admin default sudah diganti
-- [ ] `public/uploads` tidak bisa mengeksekusi skrip
-- [ ] `npm audit --omit=dev` tanpa celah tinggi yang relevan
-- [ ] File `.env` tidak ikut ter-upload ke folder publik
+- [ ] `curl -I https://<domain>/` menampilkan CSP, nosniff, X-Frame-Options, Referrer-Policy; tidak ada pelanggaran CSP di console (beranda + peta, produk, checkout + widget, cek pesanan, admin)
+- [ ] SSL Cloudflare aktif; HSTS diaktifkan di dashboard (Skill 30)
+- [ ] `npm audit --omit=dev` tanpa celah tinggi yang relevan; bundle Worker ≤ 3 MiB (`npm run cf:dryrun`)
+- [ ] Tidak ada `.env`/`.dev.vars` di repo atau bundle
 
 **Acceptance Criteria:**
 - [ ] Butir 21.2 no. 1–3 selesai sebelum go-live
@@ -766,6 +784,8 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ## Skill 26 — Rewrite Auth untuk Workers
 
+> **Sudah dikerjakan di Skill 21 (13 Okt 2026):** langkah 2 bagian `session_version` (payload `ver`, cek di `getAdminSession()`, naik saat ganti password), langkah 3 (fallback secret dihapus), dan langkah 6 (`lib/client-ip.ts` memakai `cf-connecting-ip`). Sisa skill ini: PBKDF2 Web Crypto + HMAC via `crypto.subtle`, seed-admin versi D1.
+
 **Tujuan:** Auth admin berjalan dalam batas CPU Workers Free, tanpa `node:crypto` scrypt — sekaligus menutup temuan Skill 21.2 no. 2, 4, dan 5.
 
 **Langkah:**
@@ -788,6 +808,8 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ## Skill 27 — Upload Foto: Disk → R2
 
+> **Sudah dikerjakan di Skill 21:** validasi magic bytes (`lib/image-type.ts`, portabel). Sisa skill ini: penyimpanan R2 + route GET `/uploads/[...path]`.
+
 **Tujuan:** Foto produk disimpan di R2 (persisten), bukan di filesystem — sekaligus menutup temuan Skill 21.2 no. 6 (validasi magic bytes).
 
 **Langkah:**
@@ -809,6 +831,8 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 ---
 
 ## Skill 28 — Turnstile & Rate Limit di D1
+
+> **Sudah dikerjakan di Skill 21:** langkah 1, 2, dan 4 (Turnstile di login, cek pesanan, checkout; batas input/item; rate limit checkout). Sisa skill ini: langkah 3 — rate limit pindah dari memori ke tabel D1 `login_failures`.
 
 **Tujuan:** Menutup backlog Skill 15 (kode masih reCAPTCHA) dan menyelesaikan hardening checkout (Skill 21.2 no. 3) di atas infrastruktur Cloudflare.
 

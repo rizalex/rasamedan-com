@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/auth";
-import { getRecaptchaSiteKey } from "@/lib/recaptcha";
+import { getCaptchaSiteKey } from "@/lib/turnstile";
 import LoginForm from "@/components/admin/LoginForm";
 import styles from "@/components/admin/admin.module.css";
 
@@ -12,7 +12,7 @@ export default async function AdminLoginPage() {
 
   // Site key dibaca di server saat request (bukan NEXT_PUBLIC) agar bisa diganti
   // saat deploy tanpa build ulang.
-  const recaptchaSiteKey = getRecaptchaSiteKey();
+  const captchaSiteKey = getCaptchaSiteKey();
 
   return (
     <div className={styles.loginWrap}>
@@ -25,7 +25,7 @@ export default async function AdminLoginPage() {
         />
         <h1 className={styles.loginTitle}>Rasa Medan — Admin</h1>
         <p className={styles.loginSub}>Masuk untuk mengelola produk & pesanan</p>
-        <LoginForm recaptchaSiteKey={recaptchaSiteKey} />
+        <LoginForm captchaSiteKey={captchaSiteKey} />
       </div>
     </div>
   );

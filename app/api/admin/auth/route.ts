@@ -7,7 +7,8 @@ import {
   setAdminCookie,
   clearAdminCookie,
 } from "@/lib/auth";
-import { verifyRecaptcha } from "@/lib/recaptcha";
+import { verifyCaptcha } from "@/lib/turnstile";
+import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
 import {
   consumeRateLimit,
   refundRateLimit,
@@ -19,18 +20,16 @@ export const dynamic = "force-dynamic";
 interface AdminRow extends RowDataPacket {
   id: number;
   password_hash: string;
-}
-
-/** Alamat IP client (dari header X-Forwarded-For; Skill 26 menggantinya dengan cf-connecting-ip). */
-function getClientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "local";
+  session_version: number;
 }
 
 /** POST /api/admin/auth — login admin. */
 export async function POST(req: Request) {
-  let body: { username?: string; password?: string; recaptchaToken?: string };
+  const contentType = req.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    return NextResponse.json({ error: "Content-Type harus application/json" }, { status: 415 });
+  }
+  let body: { username?: string; password?: string; captchaToken?: string };
   try {
     body = await req.json();
   } catch {
@@ -39,9 +38,9 @@ export async function POST(req: Request) {
 
   const username = String(body.username ?? "").trim();
   const password = String(body.password ?? "");
-  const recaptchaToken = String(body.recaptchaToken ?? "");
+  const captchaToken = String(body.captchaToken ?? "");
   const ip = getClientIp(req);
-  const rlKey = `login:${ip}`;
+  const rlKey = `login:${rateLimitKeyFromIp(ip)}`;
 
   if (!username || !password) {
     return NextResponse.json(
@@ -73,10 +72,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // 2) Verifikasi reCAPTCHA SEBELUM cek password (AC Skill 15).
-  const captcha = await verifyRecaptcha(recaptchaToken, ip);
+  // 2) Verifikasi Turnstile SEBELUM cek password (AC Skill 15).
+  const captcha = await verifyCaptcha(captchaToken, ip, "login");
   if (!captcha.ok) {
-    return NextResponse.json({ error: captcha.error }, { status: 400 });
+    // 503 = salah konfigurasi server (bukan ulah klien) → jatah dikembalikan.
+    if (captcha.status === 503) refundRateLimit(rlKey, rl.stamp);
+    return NextResponse.json({ error: captcha.code, code: captcha.code }, { status: captcha.status });
   }
 
   try {
@@ -84,7 +85,7 @@ export async function POST(req: Request) {
     // password, agar password benar vs salah tidak bisa dibedakan.
     assertAuthConfigured();
     const [rows] = await pool.query<AdminRow[]>(
-      "SELECT id, password_hash FROM admin_users WHERE username = ? LIMIT 1",
+      "SELECT id, password_hash, session_version FROM admin_users WHERE username = ? LIMIT 1",
       [username]
     );
     // Pesan error sama untuk username/password salah (hindari user enumeration).
@@ -95,11 +96,13 @@ export async function POST(req: Request) {
       );
     }
     resetRateLimit(rlKey);
-    await setAdminCookie(rows[0].id);
+    await setAdminCookie(rows[0].id, Number(rows[0].session_version));
     return NextResponse.json({ ok: true });
   } catch (err) {
     refundRateLimit(rlKey, rl.stamp);
-    console.error("POST /api/admin/auth gagal:", err);
+    const e = err as { code?: string; message?: string };
+    const hint = e.code === "ER_BAD_FIELD_ERROR" ? " — jalankan: npm run db:migrate:session" : "";
+    console.error("POST /api/admin/auth gagal:", (e.code ?? e.message ?? "unknown") + hint);
     return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });
   }
 }
