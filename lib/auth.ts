@@ -29,9 +29,13 @@ const KNOWN_PUBLIC_SECRET_HASHES = new Set([
 
 // Fallback khusus dev: acak per proses, sehingga tidak bisa ditebak/dipalsukan
 // (sesi dev hilang saat restart — dapat diterima). Disimpan di globalThis agar
-// tidak berganti saat modul dievaluasi ulang oleh HMR `next dev`.
+// tidak berganti saat modul dievaluasi ulang oleh HMR `next dev`. Dibuat lazy
+// (bukan di global scope modul) karena Cloudflare Workers melarang pembuatan
+// nilai acak di luar handler.
 const devGlobal = globalThis as typeof globalThis & { __rasaDevSecret?: string };
-const DEV_FALLBACK_SECRET = (devGlobal.__rasaDevSecret ??= randomBytes(32).toString("hex"));
+function devFallbackSecret(): string {
+  return (devGlobal.__rasaDevSecret ??= randomBytes(32).toString("hex"));
+}
 let devWarned = false;
 
 function secret(): string {
@@ -53,7 +57,7 @@ function secret(): string {
       "[auth] ADMIN_SESSION_SECRET kosong/terlalu pendek/sudah bocor — memakai secret acak sementara (dev saja)."
     );
   }
-  return DEV_FALLBACK_SECRET;
+  return devFallbackSecret();
 }
 
 /**

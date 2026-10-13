@@ -1,7 +1,8 @@
 /**
  * Rate limiting sederhana & in-memory (Skill 15, 21.2 no. 3).
  *
- * Cukup untuk MVP di cPanel/Passenger yang umumnya menjalankan 1 proses Node.
+ * State in-memory per proses/isolate — di Cloudflare Workers tidak andal
+ * (isolate bisa berganti); dipindah ke tabel D1 di Skill 28.
  * Default: maks 5 kegagalan dalam 15 menit per-kunci (biasanya alamat IP).
  * Setelah itu dikunci sementara sampai jendela waktu lewat.
  *

@@ -1,6 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { query } from "@/lib/db";
+import dummyProducts from "@/data/dummy-products.json";
 import type { RowDataPacket } from "mysql2";
 
 export type StockStatus = "tersedia" | "terbatas" | "pre-order" | "tanya-stok";
@@ -52,15 +51,16 @@ function rowToProduct(row: ProductRow, variants: string[]): Product {
 }
 
 /**
- * Fallback: baca langsung dari data/dummy-products.json bila DB tidak tersedia
- * (mis. saat `next build` tanpa koneksi DB). Menjaga halaman tetap ter-render.
+ * Fallback: data/dummy-products.json bila DB tidak tersedia (mis. saat
+ * `next build` tanpa koneksi DB). Menjaga halaman tetap ter-render.
+ * Di-`import` statis (ikut ter-bundle), bukan dibaca via `node:fs` — di
+ * Cloudflare Workers tidak ada filesystem.
  */
-async function readDummy(): Promise<Product[]> {
-  const raw = await readFile(
-    join(process.cwd(), "data", "dummy-products.json"),
-    "utf8"
-  );
-  const items = JSON.parse(raw) as Array<Record<string, unknown>>;
+function readDummy(reason: unknown): Product[] {
+  // Fallback ini menutupi kegagalan DB dari pengunjung, jadi WAJIB tercatat di
+  // log (`wrangler tail` / log server) agar masalah DB tetap ketahuan.
+  console.error("[products] DB tidak tersedia, memakai data dummy:", reason);
+  const items = dummyProducts as Array<Record<string, unknown>>;
   return items.map((p) => ({
     id: Number(p.id),
     slug: String(p.slug),
@@ -105,8 +105,8 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
       rows[0],
       variantRows.map((v) => v.name)
     );
-  } catch {
-    const all = await readDummy();
+  } catch (err) {
+    const all = readDummy(err);
     return all.find((p) => p.slug === slug) ?? null;
   }
 }
@@ -143,8 +143,8 @@ export async function getAllProducts(): Promise<Product[]> {
         ORDER BY category ASC, name ASC`
     );
     return rows.map((r) => rowToProduct(r, []));
-  } catch {
-    return readDummy();
+  } catch (err) {
+    return readDummy(err);
   }
 }
 
@@ -165,8 +165,8 @@ export async function getFeaturedProducts(limit = 6): Promise<Product[]> {
         LIMIT ${safeLimit}`
     );
     return rows.map((r) => rowToProduct(r, []));
-  } catch {
-    const all = await readDummy();
+  } catch (err) {
+    const all = readDummy(err);
     return all.slice(0, limit);
   }
 }

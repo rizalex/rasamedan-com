@@ -21,7 +21,7 @@ interface AdminRow extends RowDataPacket {
   password_hash: string;
 }
 
-/** Alamat IP client (di belakang proxy/Passenger memakai header X-Forwarded-For). */
+/** Alamat IP client (dari header X-Forwarded-For; Skill 26 menggantinya dengan cf-connecting-ip). */
 function getClientIp(req: Request): string {
   const xff = req.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0].trim();

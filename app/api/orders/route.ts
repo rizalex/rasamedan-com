@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 
 type IncomingItem = { productId: number; variant: string | null; quantity: number };
 
-/** Alamat IP client (di belakang proxy/Passenger memakai header X-Forwarded-For). */
+/** Alamat IP client (dari header X-Forwarded-For; Skill 26 menggantinya dengan cf-connecting-ip). */
 function getClientIp(req: Request): string {
   const xff = req.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0].trim();
@@ -163,7 +163,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ orders: result });
   } catch (err) {
     if (!refunded) refundRateLimit(rlKey, rl.stamp);
-    console.error("GET /api/orders gagal:", err);
+    // Jangan log objek error mentah: `err.sql` dari pool.query() memuat nomor HP
+    // pelanggan (nilai parameter sudah disisipkan ke teks SQL) → PII di log.
+    const e = err as { code?: string; message?: string };
+    console.error("GET /api/orders gagal:", e.code ?? e.message ?? "unknown");
     return NextResponse.json(
       { error: "Gagal mengambil data pesanan" },
       { status: 500 }

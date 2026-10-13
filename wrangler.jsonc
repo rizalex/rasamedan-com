@@ -1,0 +1,49 @@
+// Konfigurasi Cloudflare Workers untuk Rasa Medan (Skill 23).
+// Build: `npm run preview` (lokal) / `npm run deploy` (butuh `wrangler login`).
+// Rahasia runtime JANGAN ditaruh di sini — pakai `wrangler secret put <NAMA>`
+// (production) atau `.dev.vars` (lokal). Lihat CLAUDE.md §2.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rasa-medan",
+  "main": ".open-next/worker.js",
+  // Jangan di masa depan: harus <= tanggal yang didukung workerd bawaan wrangler.
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      // Log invocation mencatat URL request; GET /api/orders?phone=... (cek
+      // pesanan) memuat nomor HP pelanggan. Matikan agar data pribadi tidak
+      // tersimpan di log Cloudflare. console.error aplikasi tetap tercatat.
+      "invocation_logs": false
+    }
+  },
+  // Pengaman: wrangler menjalankan ini sebelum bundling pada SETIAP `deploy`,
+  // `versions upload`, dan `dev` — termasuk bila dipanggil langsung tanpa
+  // `npm run deploy` — sehingga rahasia .env lokal tidak bisa ikut ter-upload.
+  "build": {
+    "command": "node scripts/strip-bundle-secrets.mjs"
+  }
+
+  // Binding berikut sengaja dikomentari: `wrangler deploy` gagal bila resource
+  // belum dibuat. Aktifkan di skill terkait setelah pemilik membuatnya.
+  //
+  // Skill 24 — setelah `npx wrangler d1 create rasamedan`:
+  // "d1_databases": [
+  //   {
+  //     "binding": "DB",
+  //     "database_name": "rasamedan",
+  //     "database_id": "<ISI-DI-SKILL-24>",
+  //     "migrations_dir": "migrations"
+  //   }
+  // ],
+  //
+  // Skill 27 — setelah bucket R2 dibuat:
+  // "r2_buckets": [
+  //   { "binding": "UPLOADS", "bucket_name": "rasa-medan-uploads" }
+  // ]
+}

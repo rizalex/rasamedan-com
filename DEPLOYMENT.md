@@ -1,6 +1,8 @@
 # DEPLOYMENT.md
 ## Panduan Deploy "Rasa Medan" ke cPanel (Node.js App / Passenger)
 
+> ⚠️ **Status (Skill 23, 13 Okt 2026):** aplikasi sedang dimigrasi ke Cloudflare Workers. `server.js` sudah dihapus dari `main`, jadi langkah deploy untuk cPanel di bawah **tidak lagi berlaku untuk `main`**. Hotfix cPanel darurat: checkout commit `fb4ea12`. Dokumen ini ditulis ulang untuk Cloudflare di Skill 29.
+
 Stack: Next.js (App Router) + MySQL. Semua dependency pure-JS (mysql2) atau
 bawaan Node (crypto) — **tidak ada native binary yang perlu di-compile** di
 shared hosting. Optimasi gambar Next dimatikan (tanpa `sharp`).

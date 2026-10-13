@@ -50,6 +50,13 @@ export async function PUT(req: Request) {
   const newPassword = String(body.newPassword ?? "");
   const confirmPassword = String(body.confirmPassword ?? "");
 
+  // Batas sejalan dengan login — cegah scrypt pada string raksasa.
+  if (currentPassword.length > 256) {
+    return NextResponse.json(
+      { error: "Password saat ini salah" },
+      { status: 401 }
+    );
+  }
   if (!currentPassword) {
     return NextResponse.json(
       { error: "Password saat ini wajib diisi" },

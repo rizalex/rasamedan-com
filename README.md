@@ -1,5 +1,7 @@
 # Rasa Medan — Oleh-Oleh Khas Medan
 
+> ⚠️ **Status (Skill 23, 13 Okt 2026):** aplikasi sedang dimigrasi ke Cloudflare Workers. `server.js` sudah dihapus dari `main`, jadi bagian deploy & `server.js` untuk cPanel di bawah **tidak lagi berlaku untuk `main`**. Hotfix cPanel darurat: checkout commit `fb4ea12`. Dokumen ini ditulis ulang untuk Cloudflare di Skill 29.
+
 Website katalog + pemesanan untuk UMKM oleh-oleh khas Medan. Pelanggan browsing & checkout **tanpa akun/login**; transaksi diselesaikan manual via WhatsApp. Admin mengelola produk, kategori, dan status pesanan via dashboard.
 
 > Source of truth requirement: `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md`

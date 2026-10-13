@@ -11,7 +11,7 @@ export default async function AdminLoginPage() {
   if (await getAdminSession()) redirect("/admin");
 
   // Site key dibaca di server saat request (bukan NEXT_PUBLIC) agar bisa diganti
-  // saat deploy cPanel tanpa build ulang.
+  // saat deploy tanpa build ulang.
   const recaptchaSiteKey = getRecaptchaSiteKey();
 
   return (

@@ -4,8 +4,8 @@ import mysql from "mysql2/promise";
  * Koneksi MySQL terpusat memakai connection pool (`mysql2/promise`).
  * Kredensial diambil dari environment variables (lihat `.env.example`).
  *
- * mysql2 dipilih karena pure-JS (tanpa native binary), aman di-deploy di
- * cPanel shared hosting (lihat AGENTS.md bagian 2).
+ * mysql2 dipilih karena pure-JS (tanpa native binary). Sementara: koneksi TCP
+ * tidak didukung di Cloudflare Workers — diganti D1 di Skill 24 (CLAUDE.md §2).
  *
  * SELALU gunakan parameterized query (tanda `?`) untuk mencegah SQL injection.
  * Contoh:  const rows = await query("SELECT * FROM products WHERE id = ?", [id]);

@@ -1,0 +1,23 @@
+# Rahasia runtime untuk `npm run preview` (wrangler dev) — salin menjadi `.dev.vars`.
+# `.dev.vars` TIDAK di-commit. Untuk production pakai `wrangler secret put <NAMA>`.
+#
+# Variabel NEXT_PUBLIC_* TIDAK ditaruh di sini: nilainya di-inline saat build
+# (dibaca dari .env saat `opennextjs-cloudflare build`).
+
+# Wajib: string acak milik sendiri, minimal 32 karakter (openssl rand -hex 32).
+ADMIN_SESSION_SECRET=
+
+# MySQL — sementara sampai Skill 24 (migrasi ke D1), lalu dihapus.
+# Kosongkan di Worker: koneksi TCP ke MySQL tidak didukung, halaman publik
+# memakai data dummy dan fitur yang butuh DB gagal (risiko diterima di Skill 23).
+DB_HOST=
+DB_USER=
+DB_PASS=
+DB_NAME=
+
+# Captcha — reCAPTCHA sementara; diganti Turnstile di Skill 28.
+RECAPTCHA_SITE_KEY=
+RECAPTCHA_SECRET_KEY=
+
+# Opsional: meta verifikasi Google Search Console.
+GOOGLE_SITE_VERIFICATION=

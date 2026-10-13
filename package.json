@@ -14,18 +14,24 @@
     "db:repair": "node --env-file=.env scripts/repair-order-items.mjs",
     "seed": "node --env-file=.env scripts/seed.mjs",
     "seed:categories": "node --env-file=.env scripts/seed-categories.mjs",
-    "seed:admin": "node --env-file=.env scripts/seed-admin.mjs"
+    "seed:admin": "node --env-file=.env scripts/seed-admin.mjs",
+    "preview": "npm run cf:build && opennextjs-cloudflare preview",
+    "deploy": "npm run cf:build && opennextjs-cloudflare deploy",
+    "cf:dryrun": "npm run cf:build && wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "cf:build": "opennextjs-cloudflare build && node scripts/strip-bundle-secrets.mjs"
   },
   "dependencies": {
     "mysql2": "^3.11.5",
-    "next": "^15.1.6",
+    "next": "^15.5.27",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.10",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "wrangler": "^4.150.0"
   }
 }
