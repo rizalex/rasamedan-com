@@ -3,11 +3,24 @@ import type { PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/prom
 import { pool } from "@/lib/db";
 import type { CheckoutItem, FulfillmentMethod } from "@/lib/orders";
 import { verifyRecaptcha } from "@/lib/recaptcha";
-import { checkRateLimit, recordFailure, resetRateLimit } from "@/lib/rate-limit";
+import {
+  checkRateLimit,
+  consumeRateLimit,
+  refundRateLimit,
+} from "@/lib/rate-limit";
 
 // Batas pembuatan pesanan per IP (Skill 21.2 no. 3).
-const ORDER_LIMIT = 10;
+const ORDER_LIMIT = 10; // pesanan sukses per jam
+const CAPTCHA_FAIL_LIMIT = 30; // captcha gagal per jam
 const ORDER_WINDOW_MS = 60 * 60 * 1000; // 1 jam
+
+function tooManyOrders(retryAfterSec: number) {
+  const mins = Math.ceil(retryAfterSec / 60);
+  return NextResponse.json(
+    { error: `Terlalu banyak pesanan dari jaringan ini. Coba lagi dalam ${mins} menit.` },
+    { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
+  );
+}
 
 export const dynamic = "force-dynamic";
 
@@ -76,8 +89,17 @@ export async function GET(req: Request) {
   const ip = getClientIp(req);
   const rlKey = `checkorder:${ip}`;
 
-  // 1) Rate limit — cegah brute force enumerasi nomor HP / Order ID.
-  const rl = checkRateLimit(rlKey);
+  if (!phone) {
+    return NextResponse.json(
+      { error: "Nomor HP wajib diisi" },
+      { status: 400 }
+    );
+  }
+
+  // 1) Rate limit — cegah brute force enumerasi nomor HP / Order ID. Jatah
+  // diambil atomik di awal (sebelum `await` captcha) agar burst paralel tidak
+  // lolos; dikembalikan bila pesanan ditemukan atau terjadi error server.
+  const rl = consumeRateLimit(rlKey);
   if (rl.limited) {
     const mins = Math.ceil(rl.retryAfterSec / 60);
     return NextResponse.json(
@@ -86,20 +108,13 @@ export async function GET(req: Request) {
     );
   }
 
-  if (!phone) {
-    return NextResponse.json(
-      { error: "Nomor HP wajib diisi" },
-      { status: 400 }
-    );
-  }
-
   // 2) Verifikasi reCAPTCHA SEBELUM query DB (dilewati bila key tidak dikonfigurasi).
   const captcha = await verifyRecaptcha(recaptchaToken, ip);
   if (!captcha.ok) {
-    recordFailure(rlKey);
     return NextResponse.json({ error: captcha.error }, { status: 400 });
   }
 
+  let refunded = false;
   try {
     // phone selalu difilter; code opsional sebagai filter tambahan (bukan pengganti).
     const params: (string | number)[] = [phone];
@@ -113,12 +128,14 @@ export async function GET(req: Request) {
 
     const [orders] = await pool.query<OrderRow[]>(sql, params);
     if (orders.length === 0) {
-      // Hitung sebagai percobaan gagal (kemungkinan menebak nomor/kode).
-      recordFailure(rlKey);
+      // Jatah tetap terpakai (kemungkinan menebak nomor/kode).
       return NextResponse.json({ orders: [] });
     }
-    // Pencarian valid → reset penghitung untuk IP ini.
-    resetRateLimit(rlKey);
+    // Pencarian valid → kembalikan jatah pencarian ini saja (bukan reset), agar
+    // tebakan gagal sebelumnya tetap terhitung — mencegah bypass dengan menyelipkan
+    // pencarian nomor sendiri di antara tebakan nomor orang lain.
+    refundRateLimit(rlKey, rl.stamp);
+    refunded = true;
 
     const ids = orders.map((o) => o.id);
     const [items] = await pool.query<OrderItemRow[]>(
@@ -145,6 +162,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ orders: result });
   } catch (err) {
+    if (!refunded) refundRateLimit(rlKey, rl.stamp);
     console.error("GET /api/orders gagal:", err);
     return NextResponse.json(
       { error: "Gagal mengambil data pesanan" },
@@ -171,26 +189,25 @@ export async function POST(req: Request) {
   const rawItems = Array.isArray(body.items) ? (body.items as IncomingItem[]) : [];
   const captchaToken = String(body.captcha ?? "").trim();
   const ip = getClientIp(req);
-  const rlKey = `order:${ip}`;
+  // Dua kunci terpisah: kuota pesanan sukses, dan kegagalan captcha (batas lebih
+  // longgar) — agar token sampah tidak bisa mengunci checkout pelanggan asli.
+  const orderKey = `order:${ip}`;
+  const captchaKey = `ordercaptcha:${ip}`;
 
-  // 1) Rate limit — maks 10 pesanan per jam per IP (anti banjir pesanan palsu).
-  const rl = checkRateLimit(rlKey, ORDER_LIMIT, ORDER_WINDOW_MS);
-  if (rl.limited) {
-    const mins = Math.ceil(rl.retryAfterSec / 60);
-    return NextResponse.json(
-      { error: `Terlalu banyak pesanan dari jaringan ini. Coba lagi dalam ${mins} menit.` },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
-    );
-  }
+  // 1) Rate limit — tolak cepat sebelum kerja lain.
+  const orderRl = checkRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
+  if (orderRl.limited) return tooManyOrders(orderRl.retryAfterSec);
+  // Jatah "captcha gagal" diambil atomik sebelum `await` (anti burst paralel),
+  // lalu dikembalikan bila captcha lolos.
+  const captchaRl = consumeRateLimit(captchaKey, CAPTCHA_FAIL_LIMIT, ORDER_WINDOW_MS);
+  if (captchaRl.limited) return tooManyOrders(captchaRl.retryAfterSec);
 
   // 2) Verifikasi captcha SEBELUM kerja lain (dilewati bila key tidak dikonfigurasi).
   const captcha = await verifyRecaptcha(captchaToken, ip);
   if (!captcha.ok) {
-    recordFailure(rlKey, ORDER_WINDOW_MS);
     return NextResponse.json({ error: captcha.error }, { status: 400 });
   }
-  // Setiap percobaan yang lolos captcha dihitung ke kuota 10/jam.
-  recordFailure(rlKey, ORDER_WINDOW_MS);
+  refundRateLimit(captchaKey, captchaRl.stamp);
 
   // --- Validasi ---
   // Batas panjang input (anti penyalahgunaan; selaras batas kolom DB).
@@ -222,25 +239,40 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const items = rawItems
-    .map((it) => ({
-      productId: Number(it.productId),
-      variant: it.variant ? String(it.variant).slice(0, 100) : null,
-      quantity: Math.floor(Number(it.quantity)),
-    }))
-    .filter(
-      (it) =>
-        Number.isFinite(it.productId) && it.quantity > 0 && it.quantity <= 99
-    );
-  if (items.length === 0) {
+  if (rawItems.length === 0) {
     return NextResponse.json({ error: "Keranjang kosong" }, { status: 400 });
   }
-  if (items.length > 50) {
+  // Batas jumlah baris dicek pada array mentah, sebelum diproses.
+  if (rawItems.length > 50) {
     return NextResponse.json(
       { error: "Maksimal 50 baris item per pesanan" },
       { status: 400 }
     );
   }
+  const items = rawItems.map((it) => ({
+    productId: Number(it?.productId),
+    variant: it?.variant ? String(it.variant).slice(0, 100) : null,
+    quantity: Number(it?.quantity),
+  }));
+  // Baris tidak valid DITOLAK, bukan dibuang diam-diam (agar item pelanggan
+  // tidak hilang dari pesanan tanpa pemberitahuan).
+  if (items.some((it) => !Number.isInteger(it.productId))) {
+    return NextResponse.json({ error: "Ada item yang tidak valid" }, { status: 400 });
+  }
+  if (items.some((it) => !Number.isInteger(it.quantity) || it.quantity < 1 || it.quantity > 99)) {
+    return NextResponse.json(
+      { error: "Jumlah per item harus 1–99" },
+      { status: 400 }
+    );
+  }
+
+  // 3) Ambil satu jatah kuota secara atomik (cek + catat tanpa `await` di
+  // antaranya, agar burst paralel tidak lolos). Salah isi form sudah ditolak di
+  // atas tanpa memotong kuota; di sini jatah hanya dikembalikan untuk error
+  // server (catch), bukan untuk produk/varian tidak valid — agar request itu
+  // tidak bisa membebani DB tanpa batas.
+  const quota = consumeRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
+  if (quota.limited) return tooManyOrders(quota.retryAfterSec);
 
   let conn: PoolConnection | null = null;
   try {
@@ -305,6 +337,14 @@ export async function POST(req: Request) {
       (sum, it) => sum + it.unit_price * it.quantity,
       0
     );
+    // Kolom total_estimate INT UNSIGNED: tolak sebelum INSERT agar tidak
+    // berujung error DB (yang mengembalikan jatah kuota) atau nilai terpotong.
+    if (totalEstimate > 4_294_967_295) {
+      return NextResponse.json(
+        { error: "Total pesanan terlalu besar" },
+        { status: 400 }
+      );
+    }
     const totalWeight = orderItems.reduce(
       (sum, it) => sum + it.weight_grams * it.quantity,
       0
@@ -378,6 +418,7 @@ export async function POST(req: Request) {
       total_weight: totalWeight,
     });
   } catch (err) {
+    refundRateLimit(orderKey, quota.stamp);
     if (conn) {
       try {
         await conn.rollback();

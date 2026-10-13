@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2/promise";
 import { pool } from "@/lib/db";
-import { verifyPassword, setAdminCookie, clearAdminCookie } from "@/lib/auth";
+import {
+  assertAuthConfigured,
+  verifyPassword,
+  setAdminCookie,
+  clearAdminCookie,
+} from "@/lib/auth";
 import { verifyRecaptcha } from "@/lib/recaptcha";
-import { checkRateLimit, recordFailure, resetRateLimit } from "@/lib/rate-limit";
+import {
+  consumeRateLimit,
+  refundRateLimit,
+  resetRateLimit,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +43,26 @@ export async function POST(req: Request) {
   const ip = getClientIp(req);
   const rlKey = `login:${ip}`;
 
-  // 1) Rate limit — blokir brute force sebelum kerja lain.
-  const rl = checkRateLimit(rlKey);
+  if (!username || !password) {
+    return NextResponse.json(
+      { error: "Username dan password wajib diisi" },
+      { status: 400 }
+    );
+  }
+  // Batas panjang (username VARCHAR(50)) — cegah body raksasa membebani
+  // scrypt/DB atau memicu error DB yang berujung refund jatah.
+  if (username.length > 50 || password.length > 256) {
+    return NextResponse.json(
+      { error: "Username atau password salah" },
+      { status: 401 }
+    );
+  }
+
+  // 1) Rate limit — blokir brute force sebelum kerja lain. Jatah diambil atomik
+  // sebelum `await` apa pun agar burst paralel tidak lolos melewati batas 5.
+  // Captcha/password gagal → jatah tetap terpakai; sukses → reset; error server
+  // → dikembalikan.
+  const rl = consumeRateLimit(rlKey);
   if (rl.limited) {
     const mins = Math.ceil(rl.retryAfterSec / 60);
     return NextResponse.json(
@@ -46,28 +73,22 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!username || !password) {
-    return NextResponse.json(
-      { error: "Username dan password wajib diisi" },
-      { status: 400 }
-    );
-  }
-
   // 2) Verifikasi reCAPTCHA SEBELUM cek password (AC Skill 15).
   const captcha = await verifyRecaptcha(recaptchaToken, ip);
   if (!captcha.ok) {
-    recordFailure(rlKey);
     return NextResponse.json({ error: captcha.error }, { status: 400 });
   }
 
   try {
+    // Gagal di sini (500 seragam) bila secret salah konfigurasi — sebelum cek
+    // password, agar password benar vs salah tidak bisa dibedakan.
+    assertAuthConfigured();
     const [rows] = await pool.query<AdminRow[]>(
       "SELECT id, password_hash FROM admin_users WHERE username = ? LIMIT 1",
       [username]
     );
     // Pesan error sama untuk username/password salah (hindari user enumeration).
     if (rows.length === 0 || !verifyPassword(password, rows[0].password_hash)) {
-      recordFailure(rlKey);
       return NextResponse.json(
         { error: "Username atau password salah" },
         { status: 401 }
@@ -77,6 +98,7 @@ export async function POST(req: Request) {
     await setAdminCookie(rows[0].id);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    refundRateLimit(rlKey, rl.stamp);
     console.error("POST /api/admin/auth gagal:", err);
     return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });
   }

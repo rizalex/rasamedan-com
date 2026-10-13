@@ -38,7 +38,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 18 | Lokasi toko & info kontak | ✅ Selesai |
 | 19 | SEO & Google indexing | ⚠️ Kode selesai; gambar hero 9 MB menurunkan 19.6; 19.8 dikerjakan pemilik |
 | 20 | Code review (gerbang kualitas) | 🆕 Berulang setiap skill + backlog terbuka |
-| 21 | Security review & hardening | ⚠️ 21.2 no. 2 selesai; no. 1 tinggal rotasi secret oleh pemilik; no. 3 jalan (rate limit, batas input/item, validasi varian) tapi captcha checkout masih reCAPTCHA → Turnstile di Skill 28; no. 4–10 terbuka |
+| 21 | Security review & hardening | ⚠️ 21.2 no. 2 selesai (secret bocor/placeholder ditolak via blocklist hash; `server.js` fail-fast). No. 1 tinggal **rotasi secret oleh pemilik** (`.env` lokal masih nilai bocor → kini ditolak). No. 3 jalan: rate limit atomik (login, cek pesanan, checkout), batas input/item/total, validasi varian; captcha checkout masih reCAPTCHA → Turnstile di Skill 28. No. 4–10 terbuka. Ditunda ke no. 4: kunci rate limit jadi `local` bila proxy tidak mengirim header IP (cek di server dulu); urutan `order_code` > 9999/hari |
 | 22 | Lacak pengiriman via api.co.id | 🆕 Rancangan; menunggu verifikasi 22.0 |
 | 23–30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
 

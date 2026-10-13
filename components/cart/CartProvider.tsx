@@ -24,6 +24,9 @@ export type CartItem = {
   weight_grams: number;
 };
 
+/** Batas qty per baris — sama dengan batas server di POST /api/orders. */
+export const MAX_QTY = 99;
+
 /** Kunci unik per baris keranjang = produk + variasi. */
 function keyOf(productId: number, variant: string | null): string {
   return `${productId}::${variant ?? ""}`;
@@ -82,10 +85,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         );
         if (idx >= 0) {
           const next = [...prev];
-          next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity };
+          next[idx] = {
+            ...next[idx],
+            quantity: Math.min(MAX_QTY, next[idx].quantity + quantity),
+          };
           return next;
         }
-        return [...prev, { ...item, quantity }];
+        return [...prev, { ...item, quantity: Math.min(MAX_QTY, quantity) }];
       });
     },
     []
@@ -99,7 +105,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           return prev.filter((it) => keyOf(it.productId, it.variant) !== k);
         }
         return prev.map((it) =>
-          keyOf(it.productId, it.variant) === k ? { ...it, quantity } : it
+          keyOf(it.productId, it.variant) === k
+            ? { ...it, quantity: Math.min(MAX_QTY, quantity) }
+            : it
         );
       });
     },

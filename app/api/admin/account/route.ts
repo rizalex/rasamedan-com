@@ -84,6 +84,13 @@ export async function PUT(req: Request) {
     let passwordChanged = false;
 
     if (newUsername && newUsername !== admin.username) {
+      // Selaras dengan kolom VARCHAR(50) dan batas di login.
+      if (newUsername.length > 50) {
+        return NextResponse.json(
+          { error: "Username maksimal 50 karakter" },
+          { status: 400 }
+        );
+      }
       const [dupe] = await pool.query<AdminRow[]>(
         "SELECT id FROM admin_users WHERE username = ? AND id <> ? LIMIT 1",
         [newUsername, admin.id]
@@ -103,6 +110,14 @@ export async function PUT(req: Request) {
       if (newPassword.length < MIN_PASSWORD_LEN) {
         return NextResponse.json(
           { error: `Password baru minimal ${MIN_PASSWORD_LEN} karakter` },
+          { status: 400 }
+        );
+      }
+      // Login menolak password > 256 karakter; tolak juga di sini agar admin
+      // tidak mengunci dirinya sendiri.
+      if (newPassword.length > 256) {
+        return NextResponse.json(
+          { error: "Password baru maksimal 256 karakter" },
           { status: 400 }
         );
       }

@@ -1,4 +1,5 @@
 import {
+  createHash,
   createHmac,
   randomBytes,
   scryptSync,
@@ -15,21 +16,52 @@ import { cookies } from "next/headers";
 export const SESSION_COOKIE = "rasa_admin_session";
 const MAX_AGE_SEC = 60 * 60 * 8; // 8 jam
 
+/**
+ * SHA-256 dari nilai secret yang diketahui publik (pernah ter-commit di repo).
+ * Dibandingkan lewat hash agar nilainya sendiri tidak ikut tersimpan di sini.
+ */
+const KNOWN_PUBLIC_SECRET_HASHES = new Set([
+  // Nilai asli yang bocor di .env.example (commit ca47eef).
+  "b7d6f91bdf6e7d75189210ee287fb2ca98f8f1f7b8e76360ebdbdb420b6cdb24",
+  // Placeholder lama "ganti-dengan-..." (commit 5d23e6a).
+  "90929563b58ee0d8ed2189425d32b575dcafdd7ff778e0518d9b49b43e67120e",
+]);
+
+// Fallback khusus dev: acak per proses, sehingga tidak bisa ditebak/dipalsukan
+// (sesi dev hilang saat restart — dapat diterima). Disimpan di globalThis agar
+// tidak berganti saat modul dievaluasi ulang oleh HMR `next dev`.
+const devGlobal = globalThis as typeof globalThis & { __rasaDevSecret?: string };
+const DEV_FALLBACK_SECRET = (devGlobal.__rasaDevSecret ??= randomBytes(32).toString("hex"));
+let devWarned = false;
+
 function secret(): string {
   const s = process.env.ADMIN_SESSION_SECRET ?? "";
-  if (s.length >= 32) return s;
+  const isPublic = KNOWN_PUBLIC_SECRET_HASHES.has(
+    createHash("sha256").update(s).digest("hex")
+  );
+  if (s.length >= 32 && !isPublic) return s;
   // Tanpa secret yang kuat, JANGAN pakai nilai fallback (Skill 21.2 no. 2):
   // di production login harus ditolak, bukan ditandatangani secret publik.
   if (process.env.NODE_ENV === "production") {
     throw new Error(
-      "ADMIN_SESSION_SECRET wajib diisi minimal 32 karakter di production."
+      "ADMIN_SESSION_SECRET wajib diisi minimal 32 karakter acak milik sendiri di production."
     );
   }
-  // Khusus dev lokal: peringatan jelas, bukan string yang pernah ter-commit.
-  console.warn(
-    "[auth] ADMIN_SESSION_SECRET belum diisi/terlalu pendek — memakai secret dev. JANGAN dipakai di production."
-  );
-  return "dev-only-insecure-secret-32chars!!!!";
+  if (!devWarned) {
+    devWarned = true;
+    console.warn(
+      "[auth] ADMIN_SESSION_SECRET kosong/terlalu pendek/sudah bocor — memakai secret acak sementara (dev saja)."
+    );
+  }
+  return DEV_FALLBACK_SECRET;
+}
+
+/**
+ * Lempar error bila konfigurasi auth tidak layak. Panggil di awal handler login,
+ * SEBELUM verifikasi password, agar respons tidak bisa dipakai sebagai oracle.
+ */
+export function assertAuthConfigured(): void {
+  secret();
 }
 
 // ---- Password hashing (format: saltHex:hashHex) ----

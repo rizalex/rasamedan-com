@@ -81,6 +81,7 @@
     "errRequired": "Nama dan nomor HP wajib diisi.",
     "errAddress": "Alamat dan kecamatan/kota wajib diisi untuk pengiriman kurir.",
     "errGeneric": "Terjadi kesalahan. Silakan coba lagi.",
+    "errCaptcha": "Mohon selesaikan verifikasi keamanan terlebih dahulu.",
     "successTitle": "Pesanan dibuat!",
     "successMsg": "Kami membuka WhatsApp agar Anda bisa mengirim pesanan ke pemilik. Simpan Order ID untuk cek status.",
     "orderId": "Order ID",
