@@ -1,7 +1,7 @@
 # SKILLS.md — Rasa Medan
-## Modul Kerja untuk Claude Code (Skill 1–22)
+## Modul Kerja untuk Claude Code (Skill 1–30)
 
-Satu-satunya daftar skill proyek ini. Per 12 Oktober 2026 file ini menggabungkan `SKILLS.md` lama (Skill 1–12) dan `SKILLS-ADDENDUM.md` (Skill 13–19), lalu menambahkan gerbang review (Skill 20–21) dan pelacakan pengiriman (Skill 22).
+Satu-satunya daftar skill proyek ini. Per 12 Oktober 2026 file ini menggabungkan `SKILLS.md` lama (Skill 1–12) dan `SKILLS-ADDENDUM.md` (Skill 13–19), lalu menambahkan gerbang review (Skill 20–21) dan pelacakan pengiriman (Skill 22). Per 13 Oktober 2026 ditambahkan BAGIAN E: migrasi infrastruktur dari cPanel ke Cloudflare Workers (Skill 23–30).
 
 - Requirement (sumber kebenaran): `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md`
 - Aturan teknis & bisnis untuk agent: `CLAUDE.md`
@@ -38,8 +38,9 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 18 | Lokasi toko & info kontak | ✅ Selesai |
 | 19 | SEO & Google indexing | ⚠️ Kode selesai; gambar hero 9 MB menurunkan 19.6; 19.8 dikerjakan pemilik |
 | 20 | Code review (gerbang kualitas) | 🆕 Berulang setiap skill + backlog terbuka |
-| 21 | Security review & hardening | 🆕 Ada temuan terbuka, termasuk 1 Kritis |
+| 21 | Security review & hardening | ⚠️ 21.2 no. 2 selesai; no. 1 tinggal rotasi secret oleh pemilik; no. 3 jalan (rate limit, batas input/item, validasi varian) tapi captcha checkout masih reCAPTCHA → Turnstile di Skill 28; no. 4–10 terbuka |
 | 22 | Lacak pengiriman via api.co.id | 🆕 Rancangan; menunggu verifikasi 22.0 |
+| 23–30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
 
 ---
 
@@ -658,4 +659,207 @@ Kolom `tracking_summary` memakai `TEXT` (bukan `JSON`) agar aman di MySQL maupun
 
 ---
 
-*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 23, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*
+# BAGIAN E — Migrasi Infrastruktur ke Cloudflare Workers (Skill 23–30)
+
+Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Keputusan yang sudah diambil (13 Okt 2026):**
+
+- **Database:** Cloudflare **D1** (SQLite via binding) — BUKAN Hyperdrive + MySQL eksternal.
+- **Upload foto:** Cloudflare **R2** — bukan filesystem lokal.
+- **Captcha:** **Cloudflare Turnstile** — sekaligus menutup backlog Skill 15 (dokumen sudah Turnstile, kode masih reCAPTCHA).
+- **Paket:** Workers **Free** (10 ms CPU/request, 100 rb request/hari) — konsekuensi: hashing password memakai **PBKDF2 Web Crypto** (scrypt terlalu berat untuk batas CPU ini).
+
+**Prinsip selama migrasi:**
+
+- Aturan bisnis (`CLAUDE.md` §6) dan PRD **tidak berubah** — yang berubah hanya infrastruktur.
+- `CLAUDE.md` §2 wajib diperbarui di Skill 23; kalau tidak, agent berikutnya akan menolak perubahan Workers karena aturan lama "deployment cPanel".
+- Tiap skill tetap mengikuti "Alur Kerja Setiap Skill" (architect bila mengubah skema/integrasi → implementasi → `tsc` + build → code-reviewer → security-auditor → commit).
+- Urutan eksekusi: **23 → 24 → 26 → 28 → 27 → 25 → 29 → 30** (26 sebelum 28 karena rate limit butuh skema dari 24; 27 sesudah 26 karena upload route memakai auth baru).
+- Selama Skill 23–29 situs production **tetap berjalan di cPanel**; cutover hanya di Skill 30.
+- Skill 22 (tracking resi) dikerjakan **setelah** migrasi, langsung di atas D1.
+
+---
+
+## Skill 23 — Setup Runtime Cloudflare Workers
+
+**Tujuan:** Aplikasi Next.js bisa di-build dan dijalankan di Workers (via `@opennextjs/cloudflare`) tanpa mengubah perilaku; DB dan upload sementara masih menunjuk backend lama.
+
+**Langkah:**
+
+1. **Perbarui `CLAUDE.md` §2 terlebih dahulu:** deployment target → Cloudflare Workers (OpenNext + `nodejs_compat`); database → D1; upload foto → R2. Hapus sub-bab "Batasan Deployment cPanel", ganti dengan batasan Workers: tanpa filesystem persisten, tanpa koneksi TCP langsung, batas CPU free tier 10 ms/request, konfigurasi runtime via binding (`wrangler.jsonc`) + secrets (bukan `.env` di server).
+2. Install dev dependency: `npm i -D @opennextjs/cloudflare wrangler`.
+3. Buat `wrangler.jsonc`: name `rasa-medan`, `compatibility_date` terkini, `compatibility_flags: ["nodejs_compat"]`, binding assets, serta placeholder binding `DB` (D1) dan `UPLOADS` (R2) — ID asli diisi di Skill 24/27.
+4. Buat `open-next.config.ts` (konfigurasi default).
+5. Hapus `server.js`. Update `package.json`: `preview` = `opennextjs-cloudflare build && wrangler dev`, `deploy` = `opennextjs-cloudflare build && wrangler deploy`. Script `dev`/`build` tetap.
+6. `.gitignore`: tambahkan `.open-next/`, `.wrangler/`, `.dev.vars`. Buat `.dev.vars.example` (template secret lokal).
+7. **Pemilik:** buat akun Cloudflare, pindahkan nameserver `rasamedan.com` ke Cloudflare, jalankan `npx wrangler login`.
+8. Deploy uji ke `rasa-medan.workers.dev`; pastikan semua halaman publik ter-render (katalog masih membaca MySQL lokal dan bisa jatuh ke fallback dummy — catat risiko ini di review).
+
+**Acceptance Criteria:**
+
+- [ ] `npm run build` dan `npx opennextjs-cloudflare build` lolos tanpa error
+- [ ] Semua halaman publik render di `*.workers.dev` (cart, toggle bahasa, link WhatsApp berfungsi)
+- [ ] `server.js` terhapus; tidak ada referensi Passenger tersisa di kode
+- [ ] `CLAUDE.md` §2 sudah berbunyi Workers (bukan cPanel)
+- [ ] Review `code-reviewer` (Skill 20.1) bersih dari temuan Kritis/Penting
+
+---
+
+## Skill 24 — Migrasi Database: MySQL → D1
+
+**Tujuan:** Seluruh lapisan data berjalan di atas D1 (SQLite via binding); `mysql2` dan connection pool dihapus total.
+
+**Langkah:**
+
+1. Buat `migrations/0001_init.sql` (dialek SQLite): `ENUM(...)` → `TEXT CHECK (col IN (...))`; `AUTO_INCREMENT` → `INTEGER PRIMARY KEY AUTOINCREMENT`; `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` → `TEXT DEFAULT (datetime('now'))`; `updated_at ON UPDATE` → `CREATE TRIGGER`; `TINYINT(1)` → `INTEGER`; buang `ENGINE/CHARSET`; FK tetap (`ON DELETE CASCADE/SET NULL`); index via `CREATE INDEX`. Sertakan tabel `login_failures(ip TEXT, ts INTEGER)` untuk Skill 28 dan kolom `admin_users.session_version INTEGER NOT NULL DEFAULT 0` untuk Skill 26.
+2. Rewrite `lib/db.ts`: helper `query<T>(sql, params)` → `env.DB.prepare(sql).bind(...params).all()`; `execute()` → `.run()` (baca `meta.last_row_id`, `meta.changes`); helper `batch()` untuk operasi atomik. Akses binding via `getCloudflareContext()` dari `@opennextjs/cloudflare`, plus `initOpenNextCloudflareForLocal()` di `next.config.mjs` agar `next dev` tetap jalan dengan D1 lokal.
+3. Adaptasi semua call site: `lib/products.ts`, `lib/categories.ts`, `lib/orders-db.ts` (perluas `IN (?)` menjadi satu placeholder per elemen), `lib/product-admin.ts` (`replaceVariants` → `batch()`), dan semua route di `app/api/**`: ganti `beginTransaction/commit/rollback` dengan `batch()` (insert order + items tetap atomik), `insertId` → `meta.last_row_id`, `affectedRows` → `meta.changes`, hapus tipe `RowDataPacket`.
+4. Hapus dependensi `mysql2` dari `package.json`.
+5. Generate tipe binding: `npx wrangler types` → referensikan di `cloudflare-env.d.ts`.
+6. **Pemilik:** `npx wrangler d1 create rasamedan` lalu salin `database_id` ke `wrangler.jsonc`; jalankan migrasi lokal: `npx wrangler d1 migrations apply rasamedan --local`.
+
+**Acceptance Criteria:**
+
+- [ ] `npx tsc --noEmit` dan `npm run build` lolos
+- [ ] Katalog, detail produk, checkout (order + items tersimpan atomik), cek pesanan, dan CRUD admin berfungsi di D1 lokal
+- [ ] Tidak ada string `mysql` di `lib/` dan `app/`; `mysql2` hilang dari `package.json`
+- [ ] Review `code-reviewer` bersih; `security-auditor` memeriksa ulang semua query (parameterized, tanpa injection)
+
+---
+
+## Skill 25 — Migrasi Data & Seed
+
+**Tujuan:** Data production dari MySQL berpindah utuh ke D1; data dummy bisa di-seed ulang tanpa script Node.
+
+**Langkah:**
+
+1. Buat `scripts/export-mysql.mjs`: dump `categories`, `products`, `product_variants`, `admin_users` (dan `orders` + `order_items` bila production sudah berisi) menjadi satu file SQL dialek SQLite (escape string dengan benar, boolean → 0/1, timestamp → string ISO).
+2. Konversi `scripts/seed*.mjs` menjadi file migrasi (`migrations/0002_seed_categories.sql`, dst.) yang dibangkitkan dari `data/dummy-products.json`.
+3. `package.json`: `db:migrate` = `wrangler d1 migrations apply rasamedan --local` / `--remote`; `db:export` = script langkah 1. Hapus script `mysql2` lama yang sudah tidak dipakai.
+4. Uji import ke D1 lokal; verifikasi jumlah baris per tabel sama dengan sumber dan `order_code` tetap unik.
+5. **Catatan password admin:** hash lama berformat scrypt tidak kompatibel dengan PBKDF2 (Skill 26) dan tidak bisa di-rehash tanpa plaintext. Langkah migrasi data wajib menyertakan reset password admin (pemilik memilih password baru, dibuat lewat seed-admin versi Skill 26).
+
+**Acceptance Criteria:**
+
+- [ ] Data production terimport utuh (jumlah baris per tabel cocok)
+- [ ] Produk lama tetap tampil di katalog; pesanan lama tetap bisa dicek via nomor HP
+- [ ] Seed dummy bisa dijalankan ulang via `wrangler d1 execute --file` tanpa error
+- [ ] Ada catatan jelas langkah reset password admin saat cutover
+
+---
+
+## Skill 26 — Rewrite Auth untuk Workers
+
+**Tujuan:** Auth admin berjalan dalam batas CPU Workers Free, tanpa `node:crypto` scrypt — sekaligus menutup temuan Skill 21.2 no. 2, 4, dan 5.
+
+**Langkah:**
+
+1. Rewrite `lib/auth.ts` menjadi async penuh: `hashPassword`/`verifyPassword` memakai **PBKDF2-SHA256** via `crypto.subtle.deriveBits` (iterasi default 100.000; bila login kena batas CPU free tier, turunkan ke ±30.000 dan catat keputusannya di komentar); format tersimpan `pbkdf2:iter:salt:hash`; verifikasi memakai perbandingan XOR konstan-waktu.
+2. Token sesi: HMAC-SHA256 via `crypto.subtle` (sign/verify async); sertakan `session_version` dari `admin_users` ke payload dan cocokkan di `getAdminSession()`; naikkan nilainya saat password diganti (menutup 21.2 no. 5 — sesi perangkat lain ikut tercabut).
+3. **Hapus fallback** `"dev-insecure-secret-change-me"` (21.2 no. 2): tanpa `ADMIN_SESSION_SECRET` ≥ 32 karakter di production, login ditolak.
+4. Update semua call site sync → async: `app/api/admin/auth`, `app/api/admin/account`, `app/api/admin/upload`, `app/admin/(protected)/layout.tsx`, `app/admin/login/page.tsx`.
+5. `scripts/seed-admin` versi baru: hashing via Web Crypto di Node lokal, menghasilkan SQL `INSERT` untuk D1 (dipakai juga untuk reset password di Skill 25).
+6. Sumber IP untuk rate limit: gunakan header `cf-connecting-ip` (diisi Cloudflare, tidak bisa dipalsukan klien) — menutup 21.2 no. 4.
+
+**Acceptance Criteria:**
+
+- [ ] Login, logout, dan ganti password berfungsi; setelah ganti password semua sesi lain tercabut
+- [ ] Tanpa secret (atau secret < 32 karakter) di production, login ditolak — bukan memakai default
+- [ ] Password baru di DB berformat `pbkdf2:...` (bukan scrypt)
+- [ ] `security-auditor` (Skill 21.1) bersih dari temuan Kritis/Tinggi
+
+---
+
+## Skill 27 — Upload Foto: Disk → R2
+
+**Tujuan:** Foto produk disimpan di R2 (persisten), bukan di filesystem — sekaligus menutup temuan Skill 21.2 no. 6 (validasi magic bytes).
+
+**Langkah:**
+
+1. **Pemilik:** buat R2 bucket `rasa-medan-uploads`; isi binding `UPLOADS` di `wrangler.jsonc`.
+2. Rewrite `app/api/admin/upload/route.ts`: validasi **magic bytes** (JPEG/PNG/WEBP/GIF — jangan percaya `file.type`) + ukuran maks 2 MB; simpan via `env.UPLOADS.put("uploads/<nama-file>", bytes)`; kolom `products.image` tetap menyimpan path `/uploads/<nama-file>` seperti sekarang.
+3. Route baru `app/uploads/[...path]/route.ts` (GET publik, header cache `immutable`) melayani objek dari R2 — path lama `/uploads/x.jpg` tidak berubah sehingga **tidak perlu migrasi data** kolom `image`.
+4. Migrasi file: unggah seluruh isi `public/uploads/` ke R2 (`wrangler r2 object put` per file atau skrip kecil).
+5. Putuskan perilaku dev lokal (tulis ke disk lokal seperti sekarang, atau wajib R2 lokal via miniflare) dan dokumentasikan di `README.md`.
+6. (Opsional, fase lanjut) custom domain `cdn.rasamedan.com` untuk bucket agar penyajian gambar tidak memakan kuota request Workers.
+
+**Acceptance Criteria:**
+
+- [ ] Upload dari dashboard menampilkan foto baru lewat URL `/uploads/...` yang dilayani R2
+- [ ] Semua foto produk lama tetap tampil
+- [ ] File non-gambar ditolak walau `file.type` dimanipulasi (magic bytes diperiksa)
+- [ ] Tidak ada `node:fs` tersisa di `app/api/`
+
+---
+
+## Skill 28 — Turnstile & Rate Limit di D1
+
+**Tujuan:** Menutup backlog Skill 15 (kode masih reCAPTCHA) dan menyelesaikan hardening checkout (Skill 21.2 no. 3) di atas infrastruktur Cloudflare.
+
+**Langkah:**
+
+1. Ganti `lib/recaptcha.ts` → `lib/turnstile.ts`: verifikasi server ke `https://challenges.cloudflare.com/turnstile/v0/siteverify` memakai secret dari binding/env; IP client dari `cf-connecting-ip`.
+2. `components/admin/LoginForm.tsx` + `app/admin/login/page.tsx`: ganti widget reCAPTCHA dengan Turnstile (`https://challenges.cloudflare.com/turnstile/v0/api.js`). Env `RECAPTCHA_*` dihapus, diganti `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`.
+3. Rewrite `lib/rate-limit.ts` ke tabel `login_failures` (dari Skill 24) — pertahankan API `{limited, retryAfterSec}`; berlaku untuk login **dan** cek pesanan; tahan restart (tersimpan di D1, bukan memori).
+4. Checkout `POST /api/orders`: tambahkan verifikasi Turnstile, rate limit 10 pesanan/jam/IP, batas panjang input (nama ≤100, alamat ≤500, catatan ≤500 karakter) dan batas isi (≤50 baris item, qty ≤99 per baris) — sesuai 21.2 no. 3.
+5. **Pemilik:** daftarkan site key Turnstile untuk domain `rasamedan.com` di dashboard Cloudflare.
+6. Perbarui tabel status baris Skill 15 setelah skill ini selesai.
+
+**Acceptance Criteria:**
+
+- [ ] Login, cek pesanan, dan checkout menolak token kosong saat Turnstile dikonfigurasi; verifikasi dilakukan di server
+- [ ] Lockout setelah 5 kegagalan/15 menit tetap bekerja setelah restart Worker
+- [ ] Checkout palsu tanpa token ditolak; batas input & item ditegakkan
+- [ ] Tidak ada referensi `recaptcha` tersisa di kode
+- [ ] `security-auditor` bersih
+
+---
+
+## Skill 29 — Environment, Config & Build CI
+
+**Tujuan:** Konfigurasi production rapi (vars vs secrets), deploy otomatis dari GitHub, dan dokumentasi deploy akurat — menutup temuan Skill 21.2 no. 1.
+
+**Langkah:**
+
+1. Pisahkan konfigurasi: `NEXT_PUBLIC_*` di `vars` pada `wrangler.jsonc` (di-inline **saat build** — wajib diisi sebelum `opennextjs-cloudflare build`); secrets (`ADMIN_SESSION_SECRET`, `TURNSTILE_SECRET_KEY`, dan `API_CO_ID_KEY` untuk Skill 22 nanti) via `wrangler secret put`.
+2. Tulis ulang `.env.example`: hapus `DB_*` MySQL dan `RECAPTCHA_*`; tambah `TURNSTILE_*`; beri catatan bahwa konfigurasi production hidup di wrangler/dashboard, bukan `.env` server.
+3. **Rotasi `ADMIN_SESSION_SECRET`** (21.2 no. 1 — nilai lama pernah ter-commit di riwayat git): generate baru (`openssl rand -hex 32`), pasang via `wrangler secret put`, dan ganti nilai di `.env.example` menjadi placeholder.
+4. Aktifkan **Workers Builds** (integrasi GitHub: push ke `main` → build + deploy otomatis), atau bila tidak tersedia, dokumentasikan deploy manual `npm run deploy`.
+5. Tulis ulang `DEPLOYMENT.md` untuk Cloudflare; pindahkan versi cPanel ke `docs/legacy/DEPLOYMENT-cpanel.md`.
+6. Update `README.md` §2 (tech stack) dan §8 (deploy) sesuai kondisi baru.
+7. Sesuaikan checklist Skill 21.3 untuk Cloudflare (SSL otomatis, uploads di R2, tanpa `.htaccess`).
+
+**Acceptance Criteria:**
+
+- [ ] Push ke `main` menghasilkan deploy otomatis yang sukses (atau prosedur manual terdokumentasi dan teruji)
+- [ ] Tidak ada kredensial/secret di repo; `ADMIN_SESSION_SECRET` sudah dirotasi
+- [ ] `DEPLOYMENT.md` akurat untuk Cloudflare; versi cPanel terarsip
+- [ ] `code-reviewer` bersih
+
+---
+
+## Skill 30 — Cutover & Pensiun cPanel
+
+**Tujuan:** Domain asli dilayani Cloudflare Workers dan cPanel dinonaktifkan dengan aman. **GERBANG:** hanya dikerjakan setelah Skill 23–29 selesai dan situs stabil di `*.workers.dev` minimal 48 jam.
+
+**Langkah:**
+
+1. Bekukan perubahan di cPanel (minta pemilik tidak mengubah produk/pesanan selama cutover).
+2. Import data final (Skill 25) ke D1 **remote**; verifikasi jumlah baris dan sampel pesanan terbaru.
+3. Upload final `public/uploads/` → R2 (selisih file sejak Skill 27).
+4. Pasang custom domain `rasamedan.com` + `www` ke Worker (DNS sudah di Cloudflare sejak Skill 23); pastikan SSL otomatis aktif.
+5. Uji end-to-end di domain asli: checkout sampai pesan WhatsApp terbentuk, cek pesanan, login admin, ubah status pesanan, upload foto produk.
+6. Observasi 48 jam (Workers analytics + logs). Bila ada masalah besar → kembalikan DNS ke cPanel (rollback terdokumentasi).
+7. Setelah stabil: hentikan Node.js App di cPanel. **Jangan hapus DB MySQL sebelum 30 hari** (cadangan rollback). Jadwalkan backup D1 berkala (`wrangler d1 export` / Time Travel).
+8. Perbarui tabel status di file ini; perbarui PRD §5.1 (tech stack) bila perlu; tandai backlog Skill 15, 21.2 no. 1–6 yang sudah tertutup.
+
+**Acceptance Criteria:**
+
+- [ ] `rasamedan.com` dilayani dari Workers dengan SSL aktif
+- [ ] Seluruh alur bisnis (PRD §2) berjalan utuh di domain asli
+- [ ] Prosedur rollback teruji (DNS bisa dikembalikan ke cPanel)
+- [ ] cPanel dinonaktifkan; DB MySQL lama diarsipkan, bukan dihapus
+- [ ] Tabel status diperbarui (Skill 23–30 ✅; Skill 15 dan temuan 21.2 terkait ditutup)
+
+---
+
+*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 31, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*
