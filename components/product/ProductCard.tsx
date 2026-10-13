@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import type { Product } from "@/lib/products";
 import { formatRupiah } from "@/lib/format";
+import { priceRange } from "@/lib/pricing";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { SITE_NAME } from "@/lib/seo";
 import { IconCake, IconSnack, IconBottle } from "@/components/ui/icons";
 import StockBadge from "./StockBadge";
@@ -14,6 +18,8 @@ function CategoryIcon({ category }: { category: string }) {
 }
 
 export default function ProductCard({ product }: { product: Product }) {
+  const { t } = useI18n();
+  const { min, max } = priceRange(product);
   return (
     <Link href={`/produk/${product.slug}`} className={styles.card}>
       <div className={styles.thumb}>
@@ -37,7 +43,10 @@ export default function ProductCard({ product }: { product: Product }) {
       </div>
       <div className={styles.body}>
         <p className={styles.name}>{product.name}</p>
-        <p className={styles.price}>{formatRupiah(product.price)}</p>
+        <p className={styles.price}>
+          {min !== max && <span className={styles.priceFrom}>{t("common.priceFrom")} </span>}
+          {formatRupiah(min)}
+        </p>
       </div>
     </Link>
   );

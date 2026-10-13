@@ -53,7 +53,10 @@ export default async function CatalogPage({
   return (
     <>
       <Header />
+      {/* key: remount saat query URL berubah (mis. cari dari Header saat sudah di
+          /produk, atau pindah kategori lewat tautan) — state filter dibaca saat mount. */}
       <CatalogView
+        key={`${params.category ?? "all"}|${params.q ?? ""}`}
         products={products}
         categories={categories}
         initialCategory={params.category ?? "all"}

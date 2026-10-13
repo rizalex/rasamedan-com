@@ -85,7 +85,8 @@ Referensi lengkap kebutuhan produk ada di `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.m
 ## 4. Konvensi Kode
 
 - Penamaan variabel/fungsi: **Bahasa Inggris** (standar industri), teks yang tampil ke user: **sesuai bahasa aktif (id/en)**.
-- Semua teks UI HARUS melalui sistem i18n — jangan hardcode string ke JSX langsung.
+- Semua teks UI **publik** HARUS melalui sistem i18n — jangan hardcode string ke JSX langsung.
+- **Pengecualian (keputusan pemilik, 13 Okt 2026 — Skill 20.4):** dashboard admin (`app/admin/**`, `components/admin/**`) cukup Bahasa Indonesia; teksnya boleh ditulis langsung di komponen admin. Komponen yang juga dipakai halaman publik tetap wajib i18n.
 - Komponen kecil & reusable, ikuti struktur folder di atas.
 - Mobile-first: setiap komponen baru harus dites tampilannya di lebar layar ~375px dulu.
 - Gunakan CSS variables untuk warna tema (lihat bagian 5) agar mudah konsisten.

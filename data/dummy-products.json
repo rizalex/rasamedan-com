@@ -8,10 +8,27 @@
     "weight_grams": 400,
     "stock_status": "tersedia",
     "is_halal": true,
-    "variants": ["Coklat", "Keju", "Pandan"],
+    "variants": [
+      {
+        "name": "Coklat",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Keju",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Pandan",
+        "price_delta": 0,
+        "weight_grams": 0
+      }
+    ],
     "description": "Bolu gulung lembut khas Medan dengan lapisan krim yang legit. Cocok untuk oleh-oleh keluarga.",
     "ingredients": "Tepung terigu, telur, gula, mentega, susu, coklat/keju/pandan sesuai varian",
-    "image": "/images/products/bolu-gulung-medan.jpg"
+    "image": "/images/products/bolu-gulung-medan.jpg",
+    "is_featured": true
   },
   {
     "id": 2,
@@ -22,10 +39,27 @@
     "weight_grams": 500,
     "stock_status": "tersedia",
     "is_halal": true,
-    "variants": ["Original", "Pandan", "Durian"],
+    "variants": [
+      {
+        "name": "Original",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Pandan",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Durian",
+        "price_delta": 0,
+        "weight_grams": 0
+      }
+    ],
     "description": "Bika Ambon asli Medan dengan tekstur kenyal berongga dan aroma khas daun pandan/durian.",
     "ingredients": "Tepung sagu, telur, santan, gula, ragi, daun pandan/durian sesuai varian",
-    "image": "/images/products/bika-ambon-original.jpg"
+    "image": "/images/products/bika-ambon-original.jpg",
+    "is_featured": true
   },
   {
     "id": 3,
@@ -36,10 +70,22 @@
     "weight_grams": 700,
     "stock_status": "terbatas",
     "is_halal": true,
-    "variants": ["Original", "Kismis"],
+    "variants": [
+      {
+        "name": "Original",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Kismis",
+        "price_delta": 0,
+        "weight_grams": 0
+      }
+    ],
     "description": "Kue lapis legit dengan puluhan lapisan tipis, dipanggang tradisional dengan rempah pilihan.",
     "ingredients": "Tepung terigu, mentega, telur, gula, rempah-rempah (kayu manis, cengkeh)",
-    "image": "/images/products/lapis-legit-medan.jpg"
+    "image": "/images/products/lapis-legit-medan.jpg",
+    "is_featured": true
   },
   {
     "id": 4,
@@ -50,10 +96,22 @@
     "weight_grams": 250,
     "stock_status": "tersedia",
     "is_halal": true,
-    "variants": ["Original", "Pedas"],
+    "variants": [
+      {
+        "name": "Original",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Pedas",
+        "price_delta": 0,
+        "weight_grams": 0
+      }
+    ],
     "description": "Kacang tanah khas Tapanuli yang disangrai dengan pasir panas, renyah dan gurih.",
     "ingredients": "Kacang tanah, garam, bumbu pedas (untuk varian pedas)",
-    "image": "/images/products/kacang-sihobuk.jpg"
+    "image": "/images/products/kacang-sihobuk.jpg",
+    "is_featured": false
   },
   {
     "id": 5,
@@ -64,10 +122,27 @@
     "weight_grams": 200,
     "stock_status": "tersedia",
     "is_halal": true,
-    "variants": ["Original", "Balado", "Keju"],
+    "variants": [
+      {
+        "name": "Original",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Balado",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Keju",
+        "price_delta": 0,
+        "weight_grams": 0
+      }
+    ],
     "description": "Keripik ubi renyah dengan pilihan rasa gurih, pedas balado, hingga keju.",
     "ingredients": "Ubi jalar/singkong, minyak goreng, bumbu sesuai varian",
-    "image": "/images/products/kripik-ubi-medan.jpg"
+    "image": "/images/products/kripik-ubi-medan.jpg",
+    "is_featured": false
   },
   {
     "id": 6,
@@ -78,10 +153,22 @@
     "weight_grams": 200,
     "stock_status": "pre-order",
     "is_halal": true,
-    "variants": ["Pedas Sedang", "Pedas Extra"],
+    "variants": [
+      {
+        "name": "Pedas Sedang",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Pedas Extra",
+        "price_delta": 0,
+        "weight_grams": 0
+      }
+    ],
     "description": "Sambal kering teri kacang, tahan lama, cocok jadi teman nasi atau oleh-oleh.",
     "ingredients": "Teri, kacang tanah, cabai, bawang, gula merah",
-    "image": "/images/products/sambal-teri-kacang.jpg"
+    "image": "/images/products/sambal-teri-kacang.jpg",
+    "is_featured": false
   },
   {
     "id": 7,
@@ -92,11 +179,22 @@
     "weight_grams": 900,
     "stock_status": "tersedia",
     "is_halal": true,
-    "variants": ["Botol 620ml", "Botol 1 Liter"],
-    "variant_weights": { "Botol 1 Liter": 1300 },
+    "variants": [
+      {
+        "name": "Botol 620ml",
+        "price_delta": 0,
+        "weight_grams": 0
+      },
+      {
+        "name": "Botol 1 Liter",
+        "price_delta": 15000,
+        "weight_grams": 1300
+      }
+    ],
     "description": "Sirup markisa asli dengan rasa asam manis segar, favorit khas Sumatera Utara.",
     "ingredients": "Sari buah markisa, gula, air, pengawet makanan sesuai standar BPOM",
-    "image": "/images/products/sirup-markisa-medan.jpg"
+    "image": "/images/products/sirup-markisa-medan.jpg",
+    "is_featured": false
   },
   {
     "id": 8,
@@ -107,10 +205,17 @@
     "weight_grams": 900,
     "stock_status": "tersedia",
     "is_halal": true,
-    "variants": ["Botol 620ml"],
+    "variants": [
+      {
+        "name": "Botol 620ml",
+        "price_delta": 0,
+        "weight_grams": 0
+      }
+    ],
     "description": "Sirup dari jeruk khas Berastagi, segar dengan rasa asam manis alami.",
     "ingredients": "Sari buah jeruk, gula, air, pengawet makanan sesuai standar BPOM",
-    "image": "/images/products/sirup-jeruk-berastagi.jpg"
+    "image": "/images/products/sirup-jeruk-berastagi.jpg",
+    "is_featured": false
   },
   {
     "id": 9,
@@ -121,9 +226,16 @@
     "weight_grams": 900,
     "stock_status": "tanya-stok",
     "is_halal": true,
-    "variants": ["Botol 620ml"],
+    "variants": [
+      {
+        "name": "Botol 620ml",
+        "price_delta": 0,
+        "weight_grams": 0
+      }
+    ],
     "description": "Sirup jahe merah hangat, cocok diminum saat cuaca dingin atau untuk daya tahan tubuh.",
     "ingredients": "Ekstrak jahe merah, gula, air",
-    "image": "/images/products/sirup-jahe-merah.jpg"
+    "image": "/images/products/sirup-jahe-merah.jpg",
+    "is_featured": false
   }
 ]

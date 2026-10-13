@@ -1,7 +1,7 @@
 -- ===========================================================================
 -- Rasa Medan - Schema Database (MySQL)
 -- Mengikuti PRD bagian 5.2 & daftar tabel SKILLS.md Skill 1:
---   products, product_variants, orders, order_items, admin_users
+--   categories, products, product_variants, orders, order_items, admin_users (6 tabel)
 --
 -- Cara pakai (lokal):   npm run db:schema      (butuh `.env` sudah diisi)
 -- Cara pakai (cPanel):  import file ini via phpMyAdmin -> tab Import
@@ -26,6 +26,13 @@ CREATE TABLE IF NOT EXISTS categories (
   PRIMARY KEY (id),
   UNIQUE KEY uq_categories_slug (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Kategori awal (Skill 14). Wajib ada: admin hanya bisa menyimpan produk dengan
+-- kategori yang terdaftar di tabel ini. INSERT IGNORE = aman dijalankan ulang.
+INSERT IGNORE INTO categories (name, slug) VALUES
+  ('Kue', 'kue'),
+  ('Kering', 'kering'),
+  ('Sirup', 'sirup');
 
 -- ---------------------------------------------------------------------------
 -- products : katalog produk (1 foto utama per produk di MVP)

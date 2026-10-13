@@ -27,6 +27,36 @@ export type CartItem = {
 /** Batas qty per baris — sama dengan batas server di POST /api/orders. */
 export const MAX_QTY = 99;
 
+/**
+ * Sanitasi isi localStorage (bisa berasal dari versi lama atau dimanipulasi):
+ * buang baris rusak, lengkapi field yang hilang. Harga di sini hanya tampilan —
+ * harga final selalu dihitung ulang server saat checkout.
+ */
+function sanitizeStored(raw: unknown): CartItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CartItem[] = [];
+  for (const r of raw) {
+    if (typeof r !== "object" || r === null) continue;
+    const it = r as Record<string, unknown>;
+    const productId = Number(it.productId);
+    const quantity = Number(it.quantity);
+    if (!Number.isInteger(productId) || productId <= 0) continue;
+    if (!Number.isInteger(quantity) || quantity < 1) continue;
+    out.push({
+      productId,
+      slug: String(it.slug ?? ""),
+      name: String(it.name ?? ""),
+      price: Number(it.price) || 0,
+      variant: typeof it.variant === "string" && it.variant ? it.variant : null,
+      quantity: Math.min(MAX_QTY, quantity),
+      image: typeof it.image === "string" ? it.image : null,
+      category: String(it.category ?? ""),
+      weight_grams: Number(it.weight_grams) || 0,
+    });
+  }
+  return out;
+}
+
 /** Kunci unik per baris keranjang = produk + variasi. */
 function keyOf(productId: number, variant: string | null): string {
   return `${productId}::${variant ?? ""}`;
@@ -57,8 +87,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setItems(parsed);
+        setItems(sanitizeStored(JSON.parse(raw)));
       }
     } catch {
       /* abaikan */

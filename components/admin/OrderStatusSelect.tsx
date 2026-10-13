@@ -26,11 +26,13 @@ export default function OrderStatusSelect({
   const router = useRouter();
   const [status, setStatus] = useState(current);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function change(next: string) {
     const prev = status;
     setStatus(next);
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch(`/api/admin/orders/${orderId}`, {
         method: "PATCH",
@@ -39,17 +41,21 @@ export default function OrderStatusSelect({
       });
       if (!res.ok) {
         setStatus(prev); // rollback tampilan bila gagal
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Gagal mengubah status");
       } else {
         router.refresh(); // reflect ke daftar & ke halaman cek-pesanan pelanggan
       }
     } catch {
       setStatus(prev);
+      setError("Gagal mengubah status (koneksi)");
     } finally {
       setSaving(false);
     }
   }
 
   return (
+    <>
     <select
       className={styles.statusSelect}
       value={status}
@@ -63,5 +69,11 @@ export default function OrderStatusSelect({
         </option>
       ))}
     </select>
+    {error && (
+      <div className={styles.errorText} role="alert">
+        {error}
+      </div>
+    )}
+    </>
   );
 }

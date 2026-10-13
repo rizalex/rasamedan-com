@@ -29,7 +29,7 @@ export default function CheckoutView({
   recaptchaSiteKey: string;
 }) {
   const { t } = useI18n();
-  const { items, hydrated, subtotal, totalWeight, clear } = useCart();
+  const { items, hydrated, subtotal, totalWeight, clear, removeItem } = useCart();
 
   const [method, setMethod] = useState<FulfillmentMethod>("kurir");
   const [form, setForm] = useState({
@@ -42,8 +42,21 @@ export default function CheckoutView({
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Baris keranjang yang ditolak server (varian/produk sudah tidak tersedia),
+  // agar pelanggan bisa menghapus atau memilih ulang varian langsung dari sini.
+  const [badItem, setBadItem] = useState<{
+    productId: number;
+    variant: string | null;
+    slug: string | null;
+    needsVariant: boolean;
+  } | null>(null);
   const [captchaToken, setCaptchaToken] = useState("");
-  const [success, setSuccess] = useState<{ order: OrderConfirmation; waLink: string } | null>(
+  const [success, setSuccess] = useState<{
+    order: OrderConfirmation;
+    waLink: string;
+    /** Total server berbeda dari subtotal keranjang (harga diperbarui admin). */
+    priceChanged: boolean;
+  } | null>(
     null
   );
 
@@ -103,9 +116,40 @@ export default function CheckoutView({
     setForm((f) => ({ ...f, [field]: value }));
   }
 
+  /** Pesan i18n untuk error item terstruktur dari server (kode 409). */
+  function itemErrorMessage(data: { code?: string; productId?: number; variant?: string | null }) {
+    // Server mengirim varian baris yang ditolak (null untuk VARIANT_REQUIRED),
+    // jadi cocokkan persis agar baris lain dari produk yang sama tidak terhapus.
+    const line = items.find(
+      (it) => it.productId === data.productId && it.variant === (data.variant ?? null)
+    );
+    const product = line?.name ?? "";
+    const key =
+      data.code === "VARIANT_REQUIRED"
+        ? "checkout.errVariantRequired"
+        : data.code === "VARIANT_INVALID"
+          ? "checkout.errVariantInvalid"
+          : "checkout.errProductGone";
+    setBadItem(
+      line
+        ? {
+            productId: line.productId,
+            variant: line.variant,
+            slug: line.slug,
+            needsVariant: data.code === "VARIANT_REQUIRED",
+          }
+        : null
+    );
+    // Replacer berupa fungsi: string pengganti dengan pola "$&" dsb. tidak ditafsirkan.
+    return t(key)
+      .replace("{product}", () => product)
+      .replace("{variant}", () => data.variant ?? "");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setBadItem(null);
 
     // Validasi client ringan (server tetap sumber kebenaran).
     if (!form.recipient_name.trim() || !form.phone.trim()) {
@@ -145,7 +189,11 @@ export default function CheckoutView({
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? t("checkout.errGeneric"));
+        setError(
+          res.status === 409 && data.code
+            ? itemErrorMessage(data)
+            : data.error ?? t("checkout.errGeneric")
+        );
         resetCaptcha();
         setSubmitting(false);
         return;
@@ -167,7 +215,8 @@ export default function CheckoutView({
 
       // Data sudah tersimpan di DB (respons OK) SEBELUM membuka WhatsApp.
       clear();
-      setSuccess({ order, waLink });
+      // Total final selalu dari server; beri tahu bila berbeda dari keranjang.
+      setSuccess({ order, waLink, priceChanged: data.total_estimate !== subtotal });
       // Coba buka WhatsApp otomatis (best-effort; tombol manual tetap tersedia).
       window.open(waLink, "_blank", "noopener");
     } catch {
@@ -192,6 +241,14 @@ export default function CheckoutView({
           <p className={styles.orderId}>
             {t("checkout.orderId")}: <strong>{success.order.order_code}</strong>
           </p>
+          {success.priceChanged && (
+            <p className={styles.notice} role="status">
+              {t("checkout.pricesUpdated").replace(
+                "{total}",
+                formatRupiah(success.order.total_estimate)
+              )}
+            </p>
+          )}
           <a
             className={styles.waBtn}
             href={success.waLink}
@@ -335,6 +392,26 @@ export default function CheckoutView({
         )}
 
         {error && <p className={styles.error}>{error}</p>}
+        {badItem && (
+          <div className={styles.badItemActions}>
+            <button
+              type="button"
+              className={styles.linkAlt}
+              onClick={() => {
+                removeItem(badItem.productId, badItem.variant);
+                setBadItem(null);
+                setError(null);
+              }}
+            >
+              {t("checkout.removeItem")}
+            </button>
+            {badItem.needsVariant && badItem.slug && (
+              <Link href={`/produk/${badItem.slug}`} className={styles.linkAlt}>
+                {t("checkout.chooseVariant")}
+              </Link>
+            )}
+          </div>
+        )}
 
         <button type="submit" className={styles.submit} disabled={submitting}>
           {submitting ? t("checkout.processing") : t("checkout.placeOrder")}

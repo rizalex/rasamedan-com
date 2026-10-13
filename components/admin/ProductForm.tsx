@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Product } from "@/lib/products";
 import type { Category } from "@/lib/categories";
+import { formatRupiah, formatWeight } from "@/lib/format";
 import styles from "./admin.module.css";
 
 const STOCKS = ["tersedia", "terbatas", "pre-order", "tanya-stok"];
+
+/** Baris editor varian; nilai angka disimpan sebagai string selama diedit. */
+type VariantRow = { key: number; name: string; price_delta: string; weight_grams: string };
 
 export default function ProductForm({
   product,
@@ -28,7 +32,7 @@ export default function ProductForm({
     is_halal: boolean;
     description: string;
     ingredients: string;
-    variants: string;
+    is_featured: boolean;
   }>({
     name: product?.name ?? "",
     slug: product?.slug ?? "",
@@ -39,8 +43,19 @@ export default function ProductForm({
     is_halal: product?.is_halal ?? true,
     description: product?.description ?? "",
     ingredients: product?.ingredients ?? "",
-    variants: product?.variants.join(", ") ?? "",
+    is_featured: product?.is_featured ?? false,
   });
+  // Kunci baris dari counter (bukan acak/indeks) agar React tidak salah
+  // mencocokkan input saat baris dihapus atau dipindah.
+  const nextKey = useRef(0);
+  const [variants, setVariants] = useState<VariantRow[]>(() =>
+    (product?.variants ?? []).map((v) => ({
+      key: nextKey.current++,
+      name: v.name,
+      price_delta: v.price_delta ? String(v.price_delta) : "",
+      weight_grams: v.weight_grams ? String(v.weight_grams) : "",
+    }))
+  );
   const [image, setImage] = useState<string | null>(product?.image ?? null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -49,6 +64,30 @@ export default function ProductForm({
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
+
+  function updateVariant(key: number, patch: Partial<VariantRow>) {
+    setVariants((list) => list.map((v) => (v.key === key ? { ...v, ...patch } : v)));
+  }
+  function addVariant() {
+    setVariants((list) => [
+      ...list,
+      { key: nextKey.current++, name: "", price_delta: "", weight_grams: "" },
+    ]);
+  }
+  function removeVariant(key: number) {
+    setVariants((list) => list.filter((v) => v.key !== key));
+  }
+  function moveVariant(key: number, dir: -1 | 1) {
+    setVariants((list) => {
+      const i = list.findIndex((v) => v.key === key);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= list.length) return list;
+      const next = [...list];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+  const basePrice = Number(form.price) || 0;
 
   async function handleUpload(file: File) {
     setError(null);
@@ -81,11 +120,14 @@ export default function ProductForm({
       is_halal: form.is_halal,
       description: form.description,
       ingredients: form.ingredients,
+      is_featured: form.is_featured,
       image,
-      variants: form.variants
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean),
+      // Urutan baris = urutan tampil (position). Validasi final di server.
+      variants: variants.map((v) => ({
+        name: v.name.trim(),
+        price_delta: v.price_delta.trim() === "" ? 0 : Number(v.price_delta),
+        weight_grams: v.weight_grams.trim() === "" ? 0 : Number(v.weight_grams),
+      })),
     };
     try {
       const res = await fetch(
@@ -188,14 +230,99 @@ export default function ProductForm({
         Produk halal
       </label>
 
-      <label className={styles.field}>
-        <span>Varian (pisahkan dengan koma)</span>
+      <label className={styles.checkboxRow}>
         <input
-          value={form.variants}
-          onChange={(e) => set("variants", e.target.value)}
-          placeholder="Original, Pandan, Durian"
+          type="checkbox"
+          checked={form.is_featured}
+          onChange={(e) => set("is_featured", e.target.checked)}
         />
+        Tampilkan di beranda (produk pilihan)
       </label>
+
+      <fieldset className={styles.variantSet}>
+        <legend>Varian (opsional)</legend>
+        <p className={styles.hint} style={{ marginTop: 0 }}>
+          Harga jual varian = harga produk + selisih (boleh minus). Berat kosong =
+          ikut berat produk. Bila ada varian, pembeli wajib memilih salah satu.
+        </p>
+        {variants.map((v, i) => {
+          const delta = Number(v.price_delta) || 0;
+          const sale = basePrice + delta;
+          const weight = Number(v.weight_grams) || Number(form.weight_grams) || 0;
+          return (
+            <div key={v.key} className={styles.variantRow}>
+              <label className={styles.field}>
+                <span>Nama varian *</span>
+                <input
+                  value={v.name}
+                  onChange={(e) => updateVariant(v.key, { name: e.target.value })}
+                  placeholder="mis. Botol 1 Liter"
+                  maxLength={100}
+                  required
+                />
+              </label>
+              <div className={styles.grid2}>
+                <label className={styles.field}>
+                  <span>Selisih harga (Rp)</span>
+                  <input
+                    type="number"
+                    step={1}
+                    value={v.price_delta}
+                    onChange={(e) => updateVariant(v.key, { price_delta: e.target.value })}
+                    placeholder="0"
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Berat (gram)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={v.weight_grams}
+                    onChange={(e) => updateVariant(v.key, { weight_grams: e.target.value })}
+                    placeholder="ikut produk"
+                  />
+                </label>
+              </div>
+              <div className={styles.variantActions}>
+                <span className={sale < 0 ? styles.errorText : styles.hint}>
+                  Harga jual: {formatRupiah(sale)} · berat {formatWeight(weight)}
+                </span>
+                <span className={styles.variantButtons}>
+                  <button
+                    type="button"
+                    className={styles.btnGhost}
+                    onClick={() => moveVariant(v.key, -1)}
+                    disabled={i === 0}
+                    aria-label={`Naikkan varian ${v.name}`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.btnGhost}
+                    onClick={() => moveVariant(v.key, 1)}
+                    disabled={i === variants.length - 1}
+                    aria-label={`Turunkan varian ${v.name}`}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.btnDanger}
+                    onClick={() => removeVariant(v.key)}
+                  >
+                    Hapus
+                  </button>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+        <button type="button" className={styles.btnGhost} onClick={addVariant}>
+          + Tambah varian
+        </button>
+      </fieldset>
 
       <label className={styles.field}>
         <span>Deskripsi</span>

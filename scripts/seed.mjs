@@ -3,8 +3,12 @@
  * Sumber data: `data/dummy-products.json` (9 produk, 3 per kategori).
  * Jalankan:  npm run seed
  *
- * Idempotent: menghapus isi products + product_variants lalu memasukkan ulang,
- * sehingga aman dijalankan berkali-kali tanpa duplikat.
+ * PENGAMAN: menolak jalan bila tabel products sudah berisi, agar katalog asli
+ * di production tidak terhapus tak sengaja. Untuk mengisi ulang data dummy:
+ *   npm run seed -- --force
+ * Dengan --force, isi products + product_variants diganti dalam SATU transaksi
+ * (gagal di tengah → dikembalikan utuh). FK tetap aktif: varian ikut terhapus
+ * (CASCADE) dan order_items.product_id menjadi NULL (snapshot nama tetap ada).
  */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -28,22 +32,31 @@ try {
   console.log(`→ Membaca ${products.length} produk dari data/dummy-products.json`);
 
   conn = await mysql.createConnection(config);
-  await conn.beginTransaction();
 
-  // Reset isi tabel produk & variasi (FK checks dimatikan sementara).
-  await conn.query("SET FOREIGN_KEY_CHECKS = 0");
+  const [[{ n: existing }]] = await conn.query("SELECT COUNT(*) AS n FROM products");
+  if (existing > 0 && !process.argv.includes("--force")) {
+    console.error(
+      `❌ Tabel products sudah berisi ${existing} produk — seed dibatalkan agar data tidak terhapus.`
+    );
+    console.error("   Bila memang ingin mengganti dengan data dummy: npm run seed -- --force");
+    await conn.end();
+    process.exit(1);
+  }
+
+  // Tanpa DDL (ALTER TABLE) di dalam transaksi: DDL meng-commit implisit sehingga
+  // rollback tidak bisa mengembalikan DELETE. Id eksplisit dari JSON dipakai,
+  // jadi reset AUTO_INCREMENT tidak diperlukan.
+  await conn.beginTransaction();
   await conn.query("DELETE FROM product_variants");
   await conn.query("DELETE FROM products");
-  await conn.query("ALTER TABLE products AUTO_INCREMENT = 1");
-  await conn.query("ALTER TABLE product_variants AUTO_INCREMENT = 1");
-  await conn.query("SET FOREIGN_KEY_CHECKS = 1");
 
   let variantCount = 0;
   for (const p of products) {
     await conn.execute(
       `INSERT INTO products
-         (id, slug, name, category, price, weight_grams, stock_status, is_halal, description, ingredients, image)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, slug, name, category, price, weight_grams, stock_status, is_halal, is_featured,
+          description, ingredients, image)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         p.id,
         p.slug,
@@ -53,21 +66,26 @@ try {
         p.weight_grams ?? 0,
         p.stock_status,
         p.is_halal ? 1 : 0,
+        p.is_featured ? 1 : 0,
         p.description ?? null,
         p.ingredients ?? null,
         p.image ?? null,
       ]
     );
 
-    const variants = Array.isArray(p.variants) ? p.variants : [];
-    const variantWeights = p.variant_weights ?? {};
+    // Varian: format objek { name, price_delta, weight_grams } (format string
+    // lama tetap diterima: selisih 0, berat ikut produk). Sama dengan lib/products.ts.
+    const variants = (Array.isArray(p.variants) ? p.variants : []).map((v) =>
+      typeof v === "string"
+        ? { name: v, price_delta: 0, weight_grams: 0 }
+        : { name: v.name, price_delta: v.price_delta ?? 0, weight_grams: v.weight_grams ?? 0 }
+    );
     for (let i = 0; i < variants.length; i++) {
-      // Berat varian: pakai override bila ada, selain itu 0 (fallback ke berat produk).
-      const vWeight = variantWeights[variants[i]] ?? 0;
+      const v = variants[i];
       await conn.execute(
         `INSERT INTO product_variants (product_id, name, price_delta, weight_grams, position)
-         VALUES (?, ?, 0, ?, ?)`,
-        [p.id, variants[i], vWeight, i]
+         VALUES (?, ?, ?, ?, ?)`,
+        [p.id, v.name, v.price_delta, v.weight_grams, i]
       );
       variantCount++;
     }

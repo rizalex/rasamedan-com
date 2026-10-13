@@ -1,7 +1,13 @@
 /**
- * Buat/update akun admin. Jalankan: npm run seed:admin
- * Username & password bisa di-override lewat env ADMIN_USERNAME / ADMIN_PASSWORD.
- * Default: admin / admin123  (WAJIB diganti sebelum go-live!)
+ * Buat akun admin. Jalankan: ADMIN_PASSWORD=<kuat> npm run seed:admin
+ * Username lewat env ADMIN_USERNAME (default "admin"). ADMIN_PASSWORD WAJIB diisi
+ * (minimal 12 karakter) — tidak ada password default, agar akun admin tidak pernah
+ * dibuat dengan password yang tertulis publik di repo.
+ *
+ * PENGAMAN: bila username sudah ada, password TIDAK ditimpa (agar password yang
+ * sudah diganti lewat halaman Pengaturan tidak kembali ke default). Untuk reset
+ * password secara sengaja: ADMIN_PASSWORD=... npm run seed:admin -- --reset
+ * (--reset wajib disertai ADMIN_PASSWORD; password tidak pernah dicetak ke log).
  *
  * Hashing memakai scrypt (node:crypto) — format `saltHex:hashHex`, sama persis
  * dengan lib/auth.ts verifyPassword.
@@ -16,7 +22,7 @@ function hashPassword(password) {
 }
 
 const username = process.env.ADMIN_USERNAME ?? "admin";
-const password = process.env.ADMIN_PASSWORD ?? "admin123";
+const password = process.env.ADMIN_PASSWORD ?? "";
 
 const config = {
   host: process.env.DB_HOST ?? "localhost",
@@ -26,16 +32,39 @@ const config = {
   database: process.env.DB_NAME,
 };
 
+const reset = process.argv.includes("--reset");
+if (password.length < 12) {
+  console.error("❌ ADMIN_PASSWORD wajib diisi, minimal 12 karakter.");
+  console.error("   Contoh: ADMIN_PASSWORD='<password-kuat>' npm run seed:admin");
+  process.exit(1);
+}
+
 try {
   const conn = await mysql.createConnection(config);
-  const password_hash = hashPassword(password);
-  await conn.execute(
-    `INSERT INTO admin_users (username, password_hash) VALUES (?, ?)
-     ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)`,
-    [username, password_hash]
+  const [rows] = await conn.execute(
+    "SELECT id FROM admin_users WHERE username = ? LIMIT 1",
+    [username]
   );
-  console.log(`✅ Admin siap: username="${username}" password="${password}"`);
-  console.log("   ⚠️  Ganti password ini sebelum deployment (set ADMIN_PASSWORD).");
+  if (rows.length > 0 && !reset) {
+    console.log(`ℹ️  Admin "${username}" sudah ada — password tidak diubah.`);
+    console.log("   Untuk reset: ADMIN_PASSWORD=... npm run seed:admin -- --reset");
+    await conn.end();
+    process.exit(0);
+  }
+  const password_hash = hashPassword(password);
+  if (rows.length > 0) {
+    await conn.execute("UPDATE admin_users SET password_hash = ? WHERE username = ?", [
+      password_hash,
+      username,
+    ]);
+    console.log(`✅ Password admin "${username}" direset.`);
+  } else {
+    await conn.execute(
+      "INSERT INTO admin_users (username, password_hash) VALUES (?, ?)",
+      [username, password_hash]
+    );
+    console.log(`✅ Admin "${username}" dibuat.`);
+  }
   await conn.end();
   process.exit(0);
 } catch (err) {

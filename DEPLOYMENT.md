@@ -21,14 +21,21 @@ shared hosting. Optimasi gambar Next dimatikan (tanpa `sharp`).
 1. Buat database baru via **MySQL Databases** (mis. `namauser_rasamedan`).
 2. Buat user MySQL, assign ke database dengan **ALL PRIVILEGES**.
 3. Import schema tabel via **phpMyAdmin → Import**, pilih file **`db/schema.sql`**
-   dari project ini. Ini membuat 5 tabel: `products`, `product_variants`,
-   `orders`, `order_items`, `admin_users`.
+   dari project ini. Ini membuat 6 tabel: `categories` (sudah berisi
+   Kue/Kering/Sirup), `products`, `product_variants`, `orders`, `order_items`,
+   `admin_users`.
    - Alternatif via SSH: `npm run db:schema` (butuh `.env` terisi).
 4. (Opsional) Isi data awal produk: `npm run seed` — memasukkan 9 produk contoh
    dari `data/dummy-products.json`. Lewati jika ingin mulai dari kosong.
+   Seed menolak jalan bila tabel produk sudah berisi (cegah katalog asli terhapus);
+   untuk menimpa dengan data dummy: `npm run seed -- --force`.
 5. **Buat akun admin** (wajib, agar bisa login dashboard):
-   `ADMIN_USERNAME=admin ADMIN_PASSWORD=passwordKuat npm run seed:admin`
-   (default `admin` / `admin123` bila env tak diisi — **ganti sebelum go-live**).
+   `ADMIN_USERNAME=admin ADMIN_PASSWORD='<password-kuat-milik-sendiri>' npm run seed:admin`
+   (jangan salin contoh apa adanya; awali perintah dengan spasi agar password
+   tidak tersimpan di riwayat shell bila `HISTCONTROL=ignorespace`)
+   (`ADMIN_PASSWORD` wajib, minimal 12 karakter — tidak ada password default).
+   Akun yang sudah ada tidak ditimpa; reset password sengaja:
+   `ADMIN_PASSWORD=... npm run seed:admin -- --reset`.
 6. Catat `DB_HOST` (biasanya `localhost`), `DB_USER`, `DB_PASS`, `DB_NAME`.
 
 ---

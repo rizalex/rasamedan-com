@@ -14,7 +14,6 @@ import mysql from "mysql2/promise";
 declare global {
   // Cache pool antar hot-reload di development agar tidak membuat koneksi baru
   // setiap perubahan file.
-  // eslint-disable-next-line no-var
   var __rasaMedanPool: mysql.Pool | undefined;
 }
 

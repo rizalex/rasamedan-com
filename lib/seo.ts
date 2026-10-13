@@ -8,6 +8,7 @@
  * id/en di UI bersifat client-side sehingga tiap URL menyajikan kedua bahasa (hreflang
  * menunjuk URL yang sama untuk id & en + x-default).
  */
+import { priceRange } from "@/lib/pricing";
 import type { Metadata } from "next";
 import type { Product } from "@/lib/products";
 import { getStoreInfo } from "@/lib/store";
@@ -15,7 +16,7 @@ import { getWaNumber } from "@/lib/whatsapp";
 
 export const SITE_NAME = "Rasa Medan";
 export const SITE_TAGLINE = "Oleh-oleh Khas Medan";
-const DEFAULT_OG_IMAGE = "/images/hero-medan.png";
+const DEFAULT_OG_IMAGE = "/images/og-image.jpg"; // 1200×630 (JPEG: dukungan OG WebP belum merata)
 
 /** Base URL situs tanpa trailing slash. Fallback ke localhost saat dev. */
 export function getSiteUrl(): string {
@@ -133,22 +134,32 @@ export function productJsonLd(
     category: categoryName,
     url,
     brand: { "@type": "Brand", name: SITE_NAME },
-    offers: {
-      "@type": "Offer",
-      price: product.price,
-      priceCurrency: "IDR",
-      availability: availabilityFor(product.stock_status),
-      itemCondition: "https://schema.org/NewCondition",
-      url,
-      seller: { "@type": "Organization", name: SITE_NAME },
-    },
   };
+  // Harga varian berbeda-beda → AggregateOffer (lowPrice/highPrice); selain itu Offer.
+  const { min, max } = priceRange(product);
+  const offerBase = {
+    priceCurrency: "IDR",
+    availability: availabilityFor(product.stock_status),
+    itemCondition: "https://schema.org/NewCondition",
+    url,
+    seller: { "@type": "Organization", name: SITE_NAME },
+  };
+  data.offers =
+    min === max
+      ? { "@type": "Offer", price: min, ...offerBase }
+      : {
+          "@type": "AggregateOffer",
+          lowPrice: min,
+          highPrice: max,
+          offerCount: product.variants.length,
+          ...offerBase,
+        };
   if (product.image) data.image = [absoluteUrl(product.image)];
   if (product.variants.length > 0) {
     data.additionalProperty = {
       "@type": "PropertyValue",
       name: "Varian",
-      value: product.variants.join(", "),
+      value: product.variants.map((v) => v.name).join(", "),
     };
   }
   return data;

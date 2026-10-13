@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { ResultSetHeader } from "mysql2/promise";
 import { pool } from "@/lib/db";
 import { getAdminSession } from "@/lib/auth";
 
@@ -45,10 +46,14 @@ export async function PATCH(
   }
 
   try {
-    await pool.execute("UPDATE orders SET status = ? WHERE id = ?", [
-      status,
-      orderId,
-    ]);
+    const [res] = await pool.execute<ResultSetHeader>(
+      "UPDATE orders SET status = ? WHERE id = ?",
+      [status, orderId]
+    );
+    // affectedRows = baris yang cocok (termasuk bila status sama) → 0 = tidak ada.
+    if (res.affectedRows === 0) {
+      return NextResponse.json({ error: "Pesanan tidak ditemukan" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true, status });
   } catch (err) {
     console.error("PATCH /api/admin/orders gagal:", err);

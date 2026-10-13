@@ -56,8 +56,9 @@ export async function POST(req: Request) {
     await conn.beginTransaction();
     const [res] = await conn.execute<ResultSetHeader>(
       `INSERT INTO products
-         (slug, name, category, price, weight_grams, stock_status, is_halal, description, ingredients, image)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (slug, name, category, price, weight_grams, stock_status, is_halal, is_featured,
+          description, ingredients, image)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         p.slug,
         p.name,
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
         p.weight_grams,
         p.stock_status,
         p.is_halal ? 1 : 0,
+        p.is_featured ? 1 : 0,
         p.description,
         p.ingredients,
         p.image,

@@ -1,9 +1,9 @@
 # Product Requirement Document (PRD)
 ## Website E-commerce Rasa Medan - Oleh-Oleh khas Medan
 
-**Versi:** 1.0
-**Tanggal:** 6 Juli 2026
-**Status:** Draft untuk pengembangan MVP
+**Versi:** 1.1 (revisi mockup visual — lihat §9)
+**Tanggal:** 6 Juli 2026 (v1.0); diperbarui 13 Oktober 2026 (header disesuaikan dengan isi v1.1)
+**Status:** MVP selesai; pengembangan pasca-MVP mengikuti `SKILLS.md`
 
 ---
 

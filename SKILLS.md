@@ -30,14 +30,14 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | Skill | Topik | Status |
 |---|---|---|
 | 1–12 | MVP: setup & DB, dummy, beranda, katalog, detail, cart, checkout+WA, cek pesanan, admin, i18n, halaman pendukung, deploy | ✅ Selesai |
-| 13 | Berat produk & info ongkir manual | ⚠️ Berat produk jalan; berat per varian belum bisa diisi dari admin (backlog 20.4) |
+| 13 | Berat produk & info ongkir manual | ✅ Selesai — berat per varian kini bisa diisi dari admin (Skill 20.4) |
 | 14 | Kategori dinamis | ✅ Selesai |
 | 15 | Captcha (Turnstile) & hardening login | ⚠️ Dokumen sudah Turnstile; kode di repo masih reCAPTCHA |
 | 16 | Pengaturan akun admin | ⚠️ Jalan; sesi di perangkat lain tidak ikut dicabut (Skill 21.2 no. 5) |
 | 17 | Redesign visual | ✅ Palet diterapkan; kesesuaian dengan mockup belum diverifikasi di browser |
 | 18 | Lokasi toko & info kontak | ✅ Selesai |
-| 19 | SEO & Google indexing | ⚠️ Kode selesai; gambar hero 9 MB menurunkan 19.6; 19.8 dikerjakan pemilik |
-| 20 | Code review (gerbang kualitas) | 🆕 Berulang setiap skill + backlog terbuka |
+| 19 | SEO & Google indexing | ⚠️ Kode selesai; hero dikompres 9 MB → 188 KB WebP + OG JPEG 145 KB (20.4). JSON-LD kini AggregateOffer untuk harga varian. 19.8 dikerjakan pemilik |
+| 20 | Code review (gerbang kualitas) | ✅ Audit penuh 20.2 (13 Okt 2026): 5 Penting + 9 Minor diperbaiki; 20.3 lolos (tsc, build, lint ESLint baru, tanpa file _tmp); backlog 20.4 selesai kecuali tugas pemilik (ganti foto hero). Tetap berulang per skill |
 | 21 | Security review & hardening | ⚠️ 21.2 no. 2 selesai (secret bocor/placeholder ditolak via blocklist hash; `server.js` fail-fast). No. 1 tinggal **rotasi secret oleh pemilik** (`.env` lokal masih nilai bocor → kini ditolak). No. 3 jalan: rate limit atomik (login, cek pesanan, checkout), batas input/item/total, validasi varian; captcha checkout masih reCAPTCHA → Turnstile di Skill 28. No. 4–10 terbuka. Ditunda ke no. 4: kunci rate limit jadi `local` bila proxy tidak mengirim header IP (cek di server dulu); urutan `order_code` > 9999/hari |
 | 22 | Lacak pengiriman via api.co.id | 🆕 Rancangan; menunggu verifikasi 22.0 |
 | 23 | Setup runtime Cloudflare Workers | ✅ Kode selesai (OpenNext build + preview lokal lolos, bundle 1,4 MiB gzip, secret .env disaring dari bundle). Deploy uji ke workers.dev menunggu pemilik (`wrangler login`, rotasi secret, `NEXT_PUBLIC_SITE_URL`) |
@@ -528,6 +528,22 @@ transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-
 - **i18n:** 8 string di `en.json` belum diterjemahkan; ±9 pesan di komponen admin masih hardcode. Putuskan apakah admin cukup berbahasa Indonesia, lalu catat keputusan itu di `CLAUDE.md`.
 - **Dokumen:** header PRD masih "Versi 1.0" padahal sudah memuat revisi v1.1.
 
+### 20.5 Status backlog 20.4 & audit 20.2 (13 Okt 2026)
+| Butir | Status |
+|---|---|
+| Berat per varian dari admin | ✅ Editor varian terstruktur (nama, selisih harga, berat) di form admin |
+| `price_delta` | ✅ Diimplementasikan (keputusan pemilik): admin → detail (harga berubah per varian) → keranjang → checkout dihitung ulang server → WhatsApp → JSON-LD AggregateOffer. Rumus tunggal di `lib/pricing.ts`. Produk bervarian wajib memilih varian (server menolak `VARIANT_REQUIRED`) |
+| `is_featured` | ✅ Checkbox di admin + badge "Pilihan"; beranda menampilkan produk pilihan saja (fallback produk terbaru bila belum ada). Judul bagian menjadi "Produk Pilihan" |
+| Fallback dummy diam-diam | ✅ Keputusan pemilik: dummy hanya di development; production menampilkan halaman error (`app/error.tsx`) + log. ⚠️ Situs uji workers.dev menampilkan error sampai Skill 24 (D1) |
+| Hero 9 MB | ✅ Dikompres (WebP 188 KB untuk hero, JPEG 145 KB untuk OG). ⏳ **Pemilik:** ganti foto — memuat label merek pihak lain ("SIRUP KURNIA", "Bika Ambon Zulaikha", "Bolu Gulung Meranti") dan watermark AI |
+| PNG mockup di repo | ✅ Dipindah ke `../rasamedan-design/` (di luar repo) |
+| i18n admin | ✅ Keputusan pemilik: admin cukup Bahasa Indonesia — dicatat di CLAUDE.md §4 |
+| Header PRD | ✅ Versi 1.1 |
+| Audit 20.2 — Penting | ✅ Label kategori kustom di detail; normalisasi nomor HP (simpan & cari); kategori default di `db/schema.sql` + form admin tanpa fallback palsu; filter katalog ikut URL; `seed:admin` tidak menimpa akun (`--reset` eksplisit) |
+| Audit 20.2 — Minor diperbaiki | Placeholder reCAPTCHA dikosongkan; zona waktu WIB; PATCH status 404 + error tampil di admin; `seed` dengan pengaman `--force` & transaksi tanpa DDL; pemberitahuan harga berubah di checkout; varian wajib; batas panjang & slug dinormalisasi; escape JSON-LD (juga 21.2 no. 7); dokumen 6 tabel |
+| Batas yang diterima / catatan | Beranda hanya menampilkan produk yang ditandai (tidak dilengkapi sampai 6) — disengaja. Harga di keranjang lama tidak disegarkan otomatis; server selalu menghitung ulang dan layar sukses memberi tahu bila total berubah. **Skill 24:** deteksi 404 PATCH status memakai `affectedRows` (mysql2 = baris cocok) → sesuaikan ke `meta.changes`/cek keberadaan di D1 |
+| Audit 20.2 — Minor terbuka (keputusan konten) | ⏳ Teks Tentang/Kontak/kebijakan pengiriman (`data/site-info.json`) belum ada versi EN — kecualikan seperti deskripsi produk, atau terjemahkan? ⏳ Alamat & jam toko punya dua sumber yang isinya berbeda (`site-info.json` vs env `NEXT_PUBLIC_STORE_*`) + email `halo@rasamedan` tanpa TLD — pemilik memilih satu sumber & data yang benar |
+
 **Acceptance Criteria:**
 - [ ] Setiap skill punya review `code-reviewer` tanpa temuan Kritis/Penting sebelum di-commit
 - [ ] Semua pemeriksaan 20.3 lolos
@@ -567,7 +583,7 @@ transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-
 7. **[Rendah] JSON-LD.** Di `components/seo/JsonLd.tsx`, escape `<` (`JSON.stringify(data).replace(/</g, "\\u003c")`) karena nama dan deskripsi produk berasal dari DB.
 8. **[Rendah] Header keamanan** lewat `headers()` di `next.config.mjs` (aman untuk cPanel): `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, dan CSP dasar yang tetap mengizinkan embed Google Maps dan Turnstile.
 9. **[Rendah] Kebersihan repo.** Hapus `scripts/_tmp_dbtest.mjs` dari git. Tambahkan `.claude/settings.local.json` ke `.gitignore`, lalu keluarkan dari git dengan `git rm --cached`.
-10. **[Rendah] Password admin default** (`admin123` dari `npm run seed:admin`) wajib diganti sebelum go-live.
+10. **[Rendah] Password admin default** (`admin123` dari `npm run seed:admin`) wajib diganti sebelum go-live. *(13 Okt 2026: `seed:admin` kini menolak jalan tanpa `ADMIN_PASSWORD` ≥ 12 karakter dan tidak menimpa akun yang ada — akun BARU tidak bisa lagi dibuat dengan password default. Akun lama yang terlanjur memakai `admin123` tetap harus diganti pemilik.)*
 
 ### 21.3 Checklist pre-deploy (isi setiap kali deploy)
 - [ ] Audit penuh `security-auditor`: tidak ada temuan Kritis/Tinggi yang masih terbuka

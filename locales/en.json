@@ -33,7 +33,8 @@
     "weightEstimate": "Estimated weight",
     "description": "Description",
     "ingredients": "Ingredients",
-    "chooseVariant": "Choose variant"
+    "chooseVariant": "Choose variant",
+    "priceFrom": "From"
   },
   "home": {
     "heroEyebrow": "Straight from our hometown",
@@ -42,7 +43,7 @@
     "heroSubtitle": "Explore cakes, snacks, syrups, and Medan specialty souvenirs. Order easily via WhatsApp.",
     "heroCtaProducts": "View Products",
     "categoriesTitle": "Categories",
-    "featuredTitle": "Best Sellers",
+    "featuredTitle": "Featured Products",
     "waGreeting": "Hello, I'd like to ask about Rasa Medan products."
   },
   "catalog": {
@@ -86,7 +87,13 @@
     "successMsg": "We're opening WhatsApp so you can send your order to the owner. Save your Order ID to track status.",
     "orderId": "Order ID",
     "continueWa": "Continue to WhatsApp",
-    "checkStatus": "Track order status"
+    "checkStatus": "Track order status",
+    "errVariantInvalid": "The \"{variant}\" option for {product} is no longer available. Remove it from your cart and choose again.",
+    "errVariantRequired": "Please choose an option for {product} first.",
+    "errProductGone": "{product} is no longer available. Remove it from your cart to continue.",
+    "removeItem": "Remove from cart",
+    "chooseVariant": "Choose option",
+    "pricesUpdated": "Prices have been updated to the latest. Applicable total: {total} (already used in the WhatsApp message)."
   },
   "whatsapp": {
     "askStock": "Hello, I'd like to ask about stock availability for:"
@@ -170,5 +177,10 @@
     "Siap Diambil": "Ready for Pickup",
     "Selesai": "Completed",
     "Dibatalkan": "Cancelled"
+  },
+  "errorPage": {
+    "title": "This page can't be loaded right now",
+    "message": "Sorry, there's a temporary problem. Please try again shortly, or contact us via WhatsApp.",
+    "retry": "Try again"
   }
 }

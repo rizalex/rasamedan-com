@@ -80,7 +80,7 @@ server.js · next.config.mjs · tsconfig.json
 `db/schema.sql` membuat 6 tabel: `categories`, `products`, `product_variants`, `orders`, `order_items`, `admin_users`.
 
 - `products`: slug unik, category (slug string, divalidasi ke `categories`), price (Rp integer), `weight_grams` (Skill 13), `stock_status` (`tersedia|terbatas|pre-order|tanya-stok`), `is_halal`, `image` (`/uploads/...`), `is_featured`
-- `product_variants`: `product_id` FK cascade, `price_delta`, `weight_grams` (0 = fallback ke produk), `position`
+- `product_variants`: `product_id` FK cascade, `price_delta` (harga varian = harga produk + selisih, boleh minus), `weight_grams` (0 = fallback ke produk), `position` — semuanya diisi lewat editor varian di form admin
 - `orders`: `order_code` unik, `phone` terindeks, `fulfillment_method` (`kurir|pickup`), `status` ENUM 9 nilai, `total_estimate` (tanpa ongkir)
 - `order_items`: snapshot `product_name` + `unit_price` saat pesan (tahan hapus produk), FK order cascade / produk set-null
 - `categories`: `slug` unik; hapus ditolak bila masih dipakai produk (cek level aplikasi)
@@ -93,8 +93,7 @@ npm install
 cp .env.example .env   # isi kredensial (jangan commit .env)
 npm run db:test        # tes koneksi MySQL
 npm run db:schema      # import schema
-npm run seed           # 9 produk dummy
-npm run seed:categories
+npm run seed           # 9 produk dummy (tolak bila produk sudah ada; --force untuk timpa)
 ADMIN_USERNAME=admin ADMIN_PASSWORD=<kuat> npm run seed:admin
 npm run dev            # http://localhost:3000
 ```
@@ -118,7 +117,7 @@ Build/prod check (wajib lolos sebelum deploy cPanel): `npm run build && npm star
 ## 7. Alur Fitur Penting
 
 - **Katalog**: filter kategori dinamis dari `categories` + search client-side; badge stok 4 kondisi.
-- **Detail**: variasi (chip/dropdown, `price_delta` terbawa ke cart); status `tanya-stok` → tombol WA langsung berisi nama produk.
+- **Detail**: variasi (chip; harga & berat varian dipakai di keranjang, dihitung ulang server saat checkout — `lib/pricing.ts`); status `tanya-stok` → tombol WA langsung berisi nama produk.
 - **Cart**: `CartProvider` + `localStorage`, persist saat refresh, subtotal otomatis.
 - **Checkout**: validasi form per metode, hitung `total_berat = Σ berat×qty`, simpan order + items dulu, baru redirect `wa.me`.
 - **Cek pesanan**: cari by no HP (+ opsional Order ID), parameterized query, hanya data HP tsb.

@@ -63,7 +63,7 @@ export async function PUT(
     await conn.beginTransaction();
     await conn.execute(
       `UPDATE products SET slug=?, name=?, category=?, price=?, weight_grams=?, stock_status=?,
-              is_halal=?, description=?, ingredients=?, image=?
+              is_halal=?, is_featured=?, description=?, ingredients=?, image=?
         WHERE id=?`,
       [
         p.slug,
@@ -73,6 +73,7 @@ export async function PUT(
         p.weight_grams,
         p.stock_status,
         p.is_halal ? 1 : 0,
+        p.is_featured ? 1 : 0,
         p.description,
         p.ingredients,
         p.image,

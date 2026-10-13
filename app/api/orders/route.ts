@@ -3,6 +3,7 @@ import type { PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/prom
 import { pool } from "@/lib/db";
 import type { CheckoutItem, FulfillmentMethod } from "@/lib/orders";
 import { verifyRecaptcha } from "@/lib/recaptcha";
+import { isValidPhone, normalizePhone } from "@/lib/phone";
 import {
   checkRateLimit,
   consumeRateLimit,
@@ -51,10 +52,24 @@ interface ProductRow extends RowDataPacket {
   weight_grams: number;
 }
 
-interface VariantWeightRow extends RowDataPacket {
+interface VariantRow extends RowDataPacket {
   product_id: number;
   name: string;
+  price_delta: number;
   weight_grams: number;
+}
+
+/**
+ * Error item keranjang dengan kode terstruktur, agar klien bisa menampilkan
+ * pesan sesuai bahasa aktif dan menawarkan "hapus dari keranjang".
+ */
+function itemError(
+  code: "PRODUCT_NOT_FOUND" | "VARIANT_INVALID" | "VARIANT_REQUIRED",
+  error: string,
+  productId: number,
+  variant: string | null
+) {
+  return NextResponse.json({ error, code, productId, variant }, { status: 409 });
 }
 
 interface OrderRow extends RowDataPacket {
@@ -95,6 +110,12 @@ export async function GET(req: Request) {
       { status: 400 }
     );
   }
+  // Format nomor dinormalisasi agar "0812-…", "+62 812…" dan "0812…" cocok.
+  // Format yang jelas salah ditolak SEBELUM rate limit (bukan tebakan nomor).
+  const phoneNorm = normalizePhone(phone);
+  if (!isValidPhone(phoneNorm) || code.length > 30) {
+    return NextResponse.json({ error: "Nomor HP tidak valid" }, { status: 400 });
+  }
 
   // 1) Rate limit — cegah brute force enumerasi nomor HP / Order ID. Jatah
   // diambil atomik di awal (sebelum `await` captcha) agar burst paralel tidak
@@ -117,16 +138,19 @@ export async function GET(req: Request) {
   let refunded = false;
   try {
     // phone selalu difilter; code opsional sebagai filter tambahan (bukan pengganti).
-    const params: (string | number)[] = [phone];
+    // Cocokkan format ternormalisasi (pesanan baru) DAN input apa adanya (pesanan
+    // lama yang tersimpan sebelum normalisasi diterapkan).
+    const params: (string | number)[] = [phoneNorm, phone];
     let sql =
-      "SELECT id, order_code, recipient_name, fulfillment_method, status, total_estimate, created_at FROM orders WHERE phone = ?";
+      "SELECT id, order_code, recipient_name, fulfillment_method, status, total_estimate, created_at FROM orders WHERE phone IN (?, ?)";
     if (code) {
       sql += " AND order_code = ?";
       params.push(code);
     }
     sql += " ORDER BY created_at DESC LIMIT 50";
 
-    const [orders] = await pool.query<OrderRow[]>(sql, params);
+    // execute (prepared): pada error, `err.sql` tidak memuat nomor HP.
+    const [orders] = await pool.execute<OrderRow[]>(sql, params);
     if (orders.length === 0) {
       // Jatah tetap terpakai (kemungkinan menebak nomor/kode).
       return NextResponse.json({ orders: [] });
@@ -138,9 +162,10 @@ export async function GET(req: Request) {
     refunded = true;
 
     const ids = orders.map((o) => o.id);
-    const [items] = await pool.query<OrderItemRow[]>(
-      "SELECT order_id, product_name, variant, quantity, unit_price FROM order_items WHERE order_id IN (?)",
-      [ids]
+    const [items] = await pool.execute<OrderItemRow[]>(
+      `SELECT order_id, product_name, variant, quantity, unit_price FROM order_items
+        WHERE order_id IN (${ids.map(() => "?").join(", ")})`,
+      ids
     );
 
     const result = orders.map((o) => ({
@@ -175,6 +200,13 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // Hanya JSON: form lintas situs (enctype text/plain) tidak memicu preflight
+  // CORS, sehingga tanpa cek ini halaman lain bisa membuat pesanan palsu atas
+  // nama pengunjungnya (CSRF). fetch() dengan JSON dari situs ini selalu lolos.
+  const contentType = req.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    return NextResponse.json({ error: "Content-Type harus application/json" }, { status: 415 });
+  }
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -236,6 +268,11 @@ export async function POST(req: Request) {
   if (!phone) {
     return NextResponse.json({ error: "Nomor HP wajib diisi" }, { status: 400 });
   }
+  // Simpan dalam format ternormalisasi agar Cek Pesanan cocok apa pun format ketiknya.
+  const phoneNorm = normalizePhone(phone);
+  if (!isValidPhone(phoneNorm)) {
+    return NextResponse.json({ error: "Nomor HP tidak valid" }, { status: 400 });
+  }
   if (method === "kurir" && (!address || !city)) {
     return NextResponse.json(
       { error: "Alamat dan kecamatan/kota wajib diisi untuk pengiriman kurir" },
@@ -282,57 +319,76 @@ export async function POST(req: Request) {
     conn = await pool.getConnection();
 
     // Ambil nama & harga produk dari DB (jangan percaya harga dari client).
+    // Placeholder eksplisit per id (bukan `IN (?)` array khusus mysql2) agar
+    // query tetap valid saat pindah ke D1 (Skill 24).
     const ids = [...new Set(items.map((it) => it.productId))];
-    const [productRows] = await conn.query<ProductRow[]>(
-      "SELECT id, name, price, weight_grams FROM products WHERE id IN (?)",
-      [ids]
+    const idPlaceholders = ids.map(() => "?").join(", ");
+    const [productRows] = await conn.execute<ProductRow[]>(
+      `SELECT id, name, price, weight_grams FROM products WHERE id IN (${idPlaceholders})`,
+      ids
     );
     const byId = new Map(productRows.map((p) => [p.id, p]));
 
-    // Berat per varian (override) + daftar varian valid. Kunci: `${productId}::${variantName}`.
-    const [variantRows] = await conn.query<VariantWeightRow[]>(
-      "SELECT product_id, name, weight_grams FROM product_variants WHERE product_id IN (?)",
-      [ids]
+    // Varian per produk: selisih harga & berat (override). Dicocokkan per nama.
+    const [variantRows] = await conn.execute<VariantRow[]>(
+      `SELECT product_id, name, price_delta, weight_grams FROM product_variants
+        WHERE product_id IN (${idPlaceholders})`,
+      ids
     );
-    const variantWeight = new Map<string, number>();
-    const validVariants = new Map<number, Set<string>>();
+    const variantsByProduct = new Map<number, Map<string, VariantRow>>();
     for (const v of variantRows) {
-      variantWeight.set(`${v.product_id}::${v.name}`, v.weight_grams);
-      if (!validVariants.has(v.product_id)) {
-        validVariants.set(v.product_id, new Set());
+      if (!variantsByProduct.has(v.product_id)) {
+        variantsByProduct.set(v.product_id, new Map());
       }
-      validVariants.get(v.product_id)!.add(v.name);
+      variantsByProduct.get(v.product_id)!.set(v.name, v);
     }
 
     const orderItems: CheckoutItem[] = [];
     for (const it of items) {
       const p = byId.get(it.productId);
       if (!p) {
-        return NextResponse.json(
-          { error: `Produk (id ${it.productId}) tidak ditemukan` },
-          { status: 400 }
+        return itemError(
+          "PRODUCT_NOT_FOUND",
+          `Produk (id ${it.productId}) tidak ditemukan`,
+          it.productId,
+          it.variant
         );
       }
-      // Validasi nama varian dari client terhadap DB: produk tanpa varian → paksa
-      // null; produk bervarian → varian harus terdaftar (tolak string bebas).
-      const known = validVariants.get(p.id);
-      if (it.variant && (!known || !known.has(it.variant))) {
-        return NextResponse.json(
-          { error: `Varian tidak valid untuk produk "${p.name}"` },
-          { status: 400 }
+      // Validasi varian dari client terhadap DB:
+      // - produk tanpa varian: tolak nama varian apa pun;
+      // - produk bervarian: varian WAJIB dipilih dan harus terdaftar — bila tidak,
+      //   klien bisa membayar harga dasar untuk varian yang lebih mahal.
+      const known = variantsByProduct.get(p.id);
+      if (known && !it.variant) {
+        return itemError(
+          "VARIANT_REQUIRED",
+          `Pilih varian untuk produk "${p.name}"`,
+          p.id,
+          null
         );
       }
-      const variant = known ? it.variant : null;
-      // Gunakan berat varian jika ada (> 0), fallback ke berat produk utama.
-      const vWeight = variant
-        ? variantWeight.get(`${p.id}::${variant}`) ?? 0
-        : 0;
+      const v = it.variant ? known?.get(it.variant) : undefined;
+      if (it.variant && !v) {
+        return itemError(
+          "VARIANT_INVALID",
+          `Varian "${it.variant}" untuk produk "${p.name}" sudah tidak tersedia`,
+          p.id,
+          it.variant
+        );
+      }
+      // Harga & berat dari DB: harga = produk + selisih varian; berat varian
+      // bila > 0, selain itu berat produk (rumus sama dengan lib/pricing.ts).
+      const unitPrice = p.price + (v ? Number(v.price_delta) : 0);
+      if (unitPrice < 0) {
+        throw new Error(`Harga varian negatif untuk produk ${p.id}`);
+      }
+      const vWeight = v ? Number(v.weight_grams) : 0;
       orderItems.push({
         productId: p.id,
         name: p.name,
-        variant,
+        variant: v ? v.name : null,
         quantity: it.quantity,
-        unit_price: p.price,
+        unit_price: unitPrice,
         weight_grams: vWeight > 0 ? vWeight : p.weight_grams,
       });
     }
@@ -379,7 +435,7 @@ export async function POST(req: Request) {
           [
             orderCode,
             recipientName,
-            phone,
+            phoneNorm,
             method,
             address,
             city,
@@ -429,7 +485,9 @@ export async function POST(req: Request) {
         /* abaikan */
       }
     }
-    console.error("POST /api/orders gagal:", err);
+    // Log ringkas (kode/pesan), bukan objek error utuh — konsisten dengan GET.
+    const e = err as { code?: string; message?: string };
+    console.error("POST /api/orders gagal:", e.code ?? e.message ?? "unknown");
     return NextResponse.json(
       { error: "Gagal menyimpan pesanan. Silakan coba lagi." },
       { status: 500 }
