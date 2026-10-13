@@ -16,7 +16,20 @@ export const SESSION_COOKIE = "rasa_admin_session";
 const MAX_AGE_SEC = 60 * 60 * 8; // 8 jam
 
 function secret(): string {
-  return process.env.ADMIN_SESSION_SECRET ?? "dev-insecure-secret-change-me";
+  const s = process.env.ADMIN_SESSION_SECRET ?? "";
+  if (s.length >= 32) return s;
+  // Tanpa secret yang kuat, JANGAN pakai nilai fallback (Skill 21.2 no. 2):
+  // di production login harus ditolak, bukan ditandatangani secret publik.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "ADMIN_SESSION_SECRET wajib diisi minimal 32 karakter di production."
+    );
+  }
+  // Khusus dev lokal: peringatan jelas, bukan string yang pernah ter-commit.
+  console.warn(
+    "[auth] ADMIN_SESSION_SECRET belum diisi/terlalu pendek — memakai secret dev. JANGAN dipakai di production."
+  );
+  return "dev-only-insecure-secret-32chars!!!!";
 }
 
 // ---- Password hashing (format: saltHex:hashHex) ----

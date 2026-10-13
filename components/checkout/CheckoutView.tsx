@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useCart } from "@/components/cart/CartProvider";
@@ -10,7 +10,24 @@ import { formatOrderMessage, type FulfillmentMethod, type OrderConfirmation } fr
 import { IconWhatsApp, IconCheck } from "@/components/ui/icons";
 import styles from "./CheckoutView.module.css";
 
-export default function CheckoutView() {
+// Minimal typing untuk API grecaptcha (pola yang sama dengan LoginForm admin).
+declare global {
+  interface Window {
+    grecaptcha?: {
+      render: (el: HTMLElement, opts: Record<string, unknown>) => number;
+      reset: (id?: number) => void;
+      getResponse: (id?: number) => string;
+    };
+  }
+}
+
+const RECAPTCHA_SRC = "https://www.google.com/recaptcha/api.js?render=explicit";
+
+export default function CheckoutView({
+  recaptchaSiteKey,
+}: {
+  recaptchaSiteKey: string;
+}) {
   const { t } = useI18n();
   const { items, hydrated, subtotal, totalWeight, clear } = useCart();
 
@@ -25,9 +42,62 @@ export default function CheckoutView() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState("");
   const [success, setSuccess] = useState<{ order: OrderConfirmation; waLink: string } | null>(
     null
   );
+
+  const captchaRef = useRef<HTMLDivElement>(null);
+  const widgetId = useRef<number | null>(null);
+  const captchaEnabled = !!recaptchaSiteKey;
+
+  // Muat script Google & render widget (explicit render agar tidak balapan dgn React).
+  useEffect(() => {
+    if (!captchaEnabled) return;
+    let cancelled = false;
+
+    function tryRender() {
+      if (cancelled || widgetId.current !== null) return;
+      if (!window.grecaptcha?.render || !captchaRef.current) return;
+      widgetId.current = window.grecaptcha.render(captchaRef.current, {
+        sitekey: recaptchaSiteKey,
+        callback: (tok: string) => setCaptchaToken(tok),
+        "expired-callback": () => setCaptchaToken(""),
+        "error-callback": () => setCaptchaToken(""),
+      });
+    }
+
+    if (
+      !document.querySelector(
+        'script[src^="https://www.google.com/recaptcha/api.js"]'
+      )
+    ) {
+      const s = document.createElement("script");
+      s.src = RECAPTCHA_SRC;
+      s.async = true;
+      s.defer = true;
+      document.head.appendChild(s);
+    }
+
+    const iv = setInterval(() => {
+      if (window.grecaptcha?.render) {
+        tryRender();
+        if (widgetId.current !== null) clearInterval(iv);
+      }
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [captchaEnabled, recaptchaSiteKey]);
+
+  function resetCaptcha() {
+    setCaptchaToken("");
+    if (widgetId.current !== null && window.grecaptcha) {
+      window.grecaptcha.reset(widgetId.current);
+    }
+  }
 
   function update(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -46,6 +116,10 @@ export default function CheckoutView() {
       setError(t("checkout.errAddress"));
       return;
     }
+    if (captchaEnabled && !captchaToken) {
+      setError(t("checkout.errCaptcha"));
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -60,6 +134,7 @@ export default function CheckoutView() {
           city: method === "kurir" ? form.city : null,
           location_note: method === "kurir" ? form.location_note : null,
           note: form.note,
+          captcha: captchaToken,
           items: items.map((it) => ({
             productId: it.productId,
             variant: it.variant,
@@ -71,6 +146,7 @@ export default function CheckoutView() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? t("checkout.errGeneric"));
+        resetCaptcha();
         setSubmitting(false);
         return;
       }
@@ -96,6 +172,7 @@ export default function CheckoutView() {
       window.open(waLink, "_blank", "noopener");
     } catch {
       setError(t("checkout.errGeneric"));
+      resetCaptcha();
       setSubmitting(false);
     }
   }
@@ -252,6 +329,10 @@ export default function CheckoutView() {
           )}
           <p className={styles.note}>{t("cart.shippingNote")}</p>
         </div>
+
+        {captchaEnabled && (
+          <div ref={captchaRef} aria-label="reCAPTCHA" />
+        )}
 
         {error && <p className={styles.error}>{error}</p>}
 

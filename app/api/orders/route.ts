@@ -5,6 +5,10 @@ import type { CheckoutItem, FulfillmentMethod } from "@/lib/orders";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 import { checkRateLimit, recordFailure, resetRateLimit } from "@/lib/rate-limit";
 
+// Batas pembuatan pesanan per IP (Skill 21.2 no. 3).
+const ORDER_LIMIT = 10;
+const ORDER_WINDOW_MS = 60 * 60 * 1000; // 1 jam
+
 export const dynamic = "force-dynamic";
 
 type IncomingItem = { productId: number; variant: string | null; quantity: number };
@@ -165,8 +169,44 @@ export async function POST(req: Request) {
   const locationNote = body.location_note ? String(body.location_note).trim() : null;
   const note = body.note ? String(body.note).trim() : null;
   const rawItems = Array.isArray(body.items) ? (body.items as IncomingItem[]) : [];
+  const captchaToken = String(body.captcha ?? "").trim();
+  const ip = getClientIp(req);
+  const rlKey = `order:${ip}`;
+
+  // 1) Rate limit — maks 10 pesanan per jam per IP (anti banjir pesanan palsu).
+  const rl = checkRateLimit(rlKey, ORDER_LIMIT, ORDER_WINDOW_MS);
+  if (rl.limited) {
+    const mins = Math.ceil(rl.retryAfterSec / 60);
+    return NextResponse.json(
+      { error: `Terlalu banyak pesanan dari jaringan ini. Coba lagi dalam ${mins} menit.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
+  }
+
+  // 2) Verifikasi captcha SEBELUM kerja lain (dilewati bila key tidak dikonfigurasi).
+  const captcha = await verifyRecaptcha(captchaToken, ip);
+  if (!captcha.ok) {
+    recordFailure(rlKey, ORDER_WINDOW_MS);
+    return NextResponse.json({ error: captcha.error }, { status: 400 });
+  }
+  // Setiap percobaan yang lolos captcha dihitung ke kuota 10/jam.
+  recordFailure(rlKey, ORDER_WINDOW_MS);
 
   // --- Validasi ---
+  // Batas panjang input (anti penyalahgunaan; selaras batas kolom DB).
+  if (
+    recipientName.length > 100 ||
+    phone.length > 30 ||
+    (address?.length ?? 0) > 500 ||
+    (city?.length ?? 0) > 120 ||
+    (locationNote?.length ?? 0) > 500 ||
+    (note?.length ?? 0) > 500
+  ) {
+    return NextResponse.json(
+      { error: "Ada isian yang melebihi batas panjang" },
+      { status: 400 }
+    );
+  }
   if (method !== "kurir" && method !== "pickup") {
     return NextResponse.json({ error: "Metode pengambilan tidak valid" }, { status: 400 });
   }
@@ -185,12 +225,21 @@ export async function POST(req: Request) {
   const items = rawItems
     .map((it) => ({
       productId: Number(it.productId),
-      variant: it.variant ? String(it.variant) : null,
+      variant: it.variant ? String(it.variant).slice(0, 100) : null,
       quantity: Math.floor(Number(it.quantity)),
     }))
-    .filter((it) => Number.isFinite(it.productId) && it.quantity > 0);
+    .filter(
+      (it) =>
+        Number.isFinite(it.productId) && it.quantity > 0 && it.quantity <= 99
+    );
   if (items.length === 0) {
     return NextResponse.json({ error: "Keranjang kosong" }, { status: 400 });
+  }
+  if (items.length > 50) {
+    return NextResponse.json(
+      { error: "Maksimal 50 baris item per pesanan" },
+      { status: 400 }
+    );
   }
 
   let conn: PoolConnection | null = null;
@@ -205,14 +254,19 @@ export async function POST(req: Request) {
     );
     const byId = new Map(productRows.map((p) => [p.id, p]));
 
-    // Berat per varian (override). Kunci: `${productId}::${variantName}`.
+    // Berat per varian (override) + daftar varian valid. Kunci: `${productId}::${variantName}`.
     const [variantRows] = await conn.query<VariantWeightRow[]>(
       "SELECT product_id, name, weight_grams FROM product_variants WHERE product_id IN (?)",
       [ids]
     );
     const variantWeight = new Map<string, number>();
+    const validVariants = new Map<number, Set<string>>();
     for (const v of variantRows) {
       variantWeight.set(`${v.product_id}::${v.name}`, v.weight_grams);
+      if (!validVariants.has(v.product_id)) {
+        validVariants.set(v.product_id, new Set());
+      }
+      validVariants.get(v.product_id)!.add(v.name);
     }
 
     const orderItems: CheckoutItem[] = [];
@@ -224,14 +278,24 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
+      // Validasi nama varian dari client terhadap DB: produk tanpa varian → paksa
+      // null; produk bervarian → varian harus terdaftar (tolak string bebas).
+      const known = validVariants.get(p.id);
+      if (it.variant && (!known || !known.has(it.variant))) {
+        return NextResponse.json(
+          { error: `Varian tidak valid untuk produk "${p.name}"` },
+          { status: 400 }
+        );
+      }
+      const variant = known ? it.variant : null;
       // Gunakan berat varian jika ada (> 0), fallback ke berat produk utama.
-      const vWeight = it.variant
-        ? variantWeight.get(`${p.id}::${it.variant}`) ?? 0
+      const vWeight = variant
+        ? variantWeight.get(`${p.id}::${variant}`) ?? 0
         : 0;
       orderItems.push({
         productId: p.id,
         name: p.name,
-        variant: it.variant,
+        variant,
         quantity: it.quantity,
         unit_price: p.price,
         weight_grams: vWeight > 0 ? vWeight : p.weight_grams,
