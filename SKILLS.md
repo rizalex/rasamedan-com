@@ -41,7 +41,8 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 21 | Security review & hardening | ✅ 21.2 no. 1–10 dikerjakan (13 Okt 2026, rincian di 21.2a); checklist 21.3 versi Cloudflare. ⏳ Pemilik: rotasi `ADMIN_SESSION_SECRET` di cPanel yang masih live + Workers, ganti password admin lama. Tetap berulang per skill (21.1) |
 | 22 | Lacak pengiriman via api.co.id | 🆕 Rancangan; menunggu verifikasi 22.0 |
 | 23 | Setup runtime Cloudflare Workers | ✅ Kode selesai (OpenNext build + preview lokal lolos, bundle 1,4 MiB gzip, secret .env disaring dari bundle). Deploy uji ke workers.dev menunggu pemilik (`wrangler login`, rotasi secret, `NEXT_PUBLIC_SITE_URL`) |
-| 24–30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
+| 24 | Migrasi database MySQL → D1 | ✅ Kode selesai (14 Okt 2026): `migrations/0001_init.sql`, `lib/db.ts` D1, semua route via `batch()`/`queryIn`, `mysql2` dihapus; E2E 54 skenario (termasuk checkout 50 baris) lolos di `next dev` + preview workerd (D1 lokal). ⏳ Pemilik: `wrangler d1 create rasamedan` + isi `database_id` (deploy diblokir sampai diisi) |
+| 25–30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
 
 ---
 
@@ -606,7 +607,7 @@ Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal a
 - [ ] `ADMIN_SESSION_SECRET` via `wrangler secret put`, ≥32 karakter acak, belum pernah ter-commit, berbeda dari dev
 - [ ] `TURNSTILE_SECRET_KEY` via `wrangler secret put` + `TURNSTILE_SITE_KEY` di `vars` `wrangler.jsonc`, bukan test key; hostname widget = domain production (+ workers.dev bila staging); `ALLOW_TEST_CAPTCHA` TIDAK diset; login, cek pesanan, checkout diuji di URL deploy
 - [ ] `NEXT_PUBLIC_SITE_URL` = domain https asli **saat build** (`npm run deploy` otomatis menolak localhost/http/site key kosong lewat `scripts/check-deploy-env.mjs`); `npm run cf:build` menampilkan `[strip-bundle-secrets] OK`
-- [ ] Migrasi DB terbaru diterapkan (sekarang `db:migrate:session`; setelah Skill 24 `wrangler d1 migrations apply --remote`)
+- [ ] Migrasi DB terbaru diterapkan ke D1 production (`npm run db:migrate:remote`)
 - [ ] Password admin default sudah diganti
 - [ ] `curl -I https://<domain>/` menampilkan CSP, nosniff, X-Frame-Options, Referrer-Policy; tidak ada pelanggaran CSP di console (beranda + peta, produk, checkout + widget, cek pesanan, admin)
 - [ ] SSL Cloudflare aktif; HSTS diaktifkan di dashboard (Skill 30)
@@ -761,7 +762,21 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ---
 
+### 24a — Catatan pelaksanaan (14 Okt 2026)
+
+- **Skema:** `migrations/0001_init.sql` sesuai langkah 1, ditambah: waktu = teks ISO-8601 UTC (`strftime('%Y-%m-%dT%H:%M:%SZ','now')`, bisa langsung `new Date()`); `COLLATE NOCASE` pada username, slug, kategori, nama, `order_code` (paritas collation `utf8mb4_general_ci` MySQL: login "ADMIN" = "admin", cek Order ID huruf kecil tetap cocok); CHECK untuk enum, boolean, dan angka non-negatif; trigger `updated_at`. Kategori awal (kue/kering/sirup) ikut di 0001. Tabel rate limit bernama `login_failures(bucket TEXT, ts INTEGER)` — `bucket` = kunci rate limit (mis. `login:<ip>`, `checkorder:<ip>`), bukan IP mentah, karena dipakai untuk login **dan** cek pesanan/checkout (Skill 28).
+- **`lib/db.ts`:** `query`, `queryIn` (memecah `IN` per 90 id — D1 menolak >100 parameter per query; teruji katalog 150 produk), `execute` (`changes`/`lastRowId`), `statement` + `batch` (atomik), `isUniqueViolation`, `dbErrorMessage` (log ringkas tanpa parameter).
+- **Atomik:** checkout = 1 `batch` berisi **2 statement** berapa pun jumlah baris: INSERT order, lalu INSERT item via `json_each(?)` dari JSON yang dibangun server (paket Free D1 membatasi 50 query per invocation Worker; 1 INSERT per item akan gagal untuk keranjang besar). Jumlah item tersimpan diverifikasi; retry nomor urut (maks 5) saat UNIQUE bentrok; nomor urut berikutnya = `MAX(CAST(substr(...)))` (benar juga di atas 9999). Produk baru/ubah = 1 `batch` (produk + hapus/isi varian). Teruji: item gagal CHECK → order ikut batal.
+- **`next dev`:** `initOpenNextCloudflareForDev()` di `next.config.mjs` (hanya NODE_ENV=development); `next dev` dan `npm run preview` berbagi D1 lokal `.wrangler/state`.
+- **Tipe:** `npm run cf:typegen` = `wrangler types --include-runtime=false` (+ nama secret dari `.dev.vars.example`), ditambah `types/cloudflare-runtime.d.ts` (subset D1). Runtime types lengkap sengaja tidak dipakai: menimpa tipe DOM (`Response.json()` → `unknown`) sehingga komponen client gagal type-check.
+- **`wrangler.jsonc`:** binding `DB` aktif dengan `database_id` placeholder (nol semua) — cukup untuk lokal; `scripts/check-deploy-env.mjs` menolak deploy sampai diganti id asli.
+- **Skrip:** `seed`/`seed:admin` ditulis ulang via `wrangler d1 execute` (`scripts/lib/d1.mjs`; default lokal, `--remote` eksplisit). Skrip khusus MySQL dihapus (`test-db`, `apply-schema`, `migrate-add-weight`, `migrate-session-version`, `repair-order-items`, `seed-categories`); `db/schema.sql` diarsip ke `docs/legacy/schema-mysql.sql`. `@opennextjs/cloudflare` dipindah ke `dependencies` (dipakai runtime oleh `lib/db.ts`).
+- **Perilaku baru kecil:** kata kunci pencarian pesanan admin disaring ke huruf/angka/"-" dan maks 24 karakter (D1 menolak pola LIKE >50 byte; wildcard `%`/`_` tidak bisa dipakai); PUT produk yang id-nya tidak ada → 404 (dulu 500, juga bila terhapus bersamaan); `npm run seed` ke `--remote` ditolak (data dummy hanya lokal); log error DB disaring (`dbErrorMessage` membuang nilai dari `D1_TYPE_ERROR`); id route admin wajib bilangan bulat > 0; nama kategori ≤100 saat rename.
+- **Belum bisa diuji lokal (cek saat deploy uji workers.dev):** batas D1 remote yang tidak ditegakkan miniflare — 50 query/invocation (checkout 50 baris), pola LIKE ≤50 byte (pencarian admin). Timing login username tak dikenal (tanpa hashing) dicatat untuk Skill 26.; urutan tie-break `id DESC` pada daftar pesanan.
+
 ## Skill 25 — Migrasi Data & Seed
+
+> **Catatan dari Skill 24:** `mysql2` sudah dihapus dari `package.json`. Untuk `scripts/export-mysql.mjs` (langkah 1) pasang sementara tanpa menyimpan (`npm i --no-save mysql2`) atau ekspor via phpMyAdmin/`mysqldump` lalu konversi. Kategori awal sudah ada di `0001_init.sql` (pakai `INSERT OR IGNORE` agar impor data production tidak bentrok). `npm run seed`/`seed:admin` sudah memakai D1 (langkah 2–3 sebagian selesai). Kolom waktu wajib dikonversi ke format `YYYY-MM-DDTHH:MM:SSZ` (UTC) — timestamp MySQL lama tersimpan dalam zona waktu server cPanel, jadi konversi ke UTC harus memakai zona itu.
 
 **Tujuan:** Data production dari MySQL berpindah utuh ke D1; data dummy bisa di-seed ulang tanpa script Node.
 

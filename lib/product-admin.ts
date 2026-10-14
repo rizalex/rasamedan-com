@@ -1,4 +1,4 @@
-import type { PoolConnection } from "mysql2/promise";
+import { statement } from "@/lib/db";
 import { slugify } from "@/lib/slug";
 import type { ProductVariant } from "@/lib/products";
 
@@ -48,8 +48,8 @@ function validateVariants(raw: unknown, price: number): VariantResult {
     const name = String(v.name ?? "").trim();
     if (!name) return { ok: false, error: "Nama varian wajib diisi" };
     if (name.length > 100) return { ok: false, error: `Nama varian "${name.slice(0, 20)}…" terlalu panjang` };
-    // Banding tanpa beda huruf besar/kecil: checkout mencocokkan varian per nama,
-    // dan collation MySQL tidak peka huruf sementara SQLite (D1) peka.
+    // Banding tanpa beda huruf besar/kecil agar varian tidak membingungkan
+    // pelanggan ("Coklat" vs "coklat"); checkout mencocokkan nama apa adanya.
     const key = name.toLowerCase();
     if (seen.has(key)) return { ok: false, error: `Nama varian "${name}" duplikat` };
     seen.add(key);
@@ -125,21 +125,22 @@ export function validateProductInput(
   };
 }
 
-/** Ganti seluruh varian produk (dipanggil di dalam transaksi yang sama dengan produk). */
-export async function replaceVariants(
-  conn: PoolConnection,
-  productId: number,
+/**
+ * Statement INSERT varian untuk dijalankan di `batch()` yang sama dengan
+ * INSERT/UPDATE produk (atomik). `product` = id produk, atau slug bila produk
+ * baru dibuat di batch yang sama (id belum diketahui).
+ */
+export function variantInsertStatements(
+  product: { id: number } | { slug: string },
   variants: ProductVariant[]
-) {
-  await conn.execute("DELETE FROM product_variants WHERE product_id = ?", [
-    productId,
-  ]);
-  for (let i = 0; i < variants.length; i++) {
-    const v = variants[i];
-    await conn.execute(
+): D1PreparedStatement[] {
+  const ref = "id" in product ? "?" : "(SELECT id FROM products WHERE slug = ?)";
+  const refValue = "id" in product ? product.id : product.slug;
+  return variants.map((v, i) =>
+    statement(
       `INSERT INTO product_variants (product_id, name, price_delta, weight_grams, position)
-       VALUES (?, ?, ?, ?, ?)`,
-      [productId, v.name, v.price_delta, v.weight_grams, i]
-    );
-  }
+       VALUES (${ref}, ?, ?, ?, ?)`,
+      [refValue, v.name, v.price_delta, v.weight_grams, i]
+    )
+  );
 }

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import { dbErrorMessage, query } from "@/lib/db";
 import {
   assertAuthConfigured,
   verifyPassword,
@@ -17,7 +16,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-interface AdminRow extends RowDataPacket {
+interface AdminRow {
   id: number;
   password_hash: string;
   session_version: number;
@@ -84,7 +83,7 @@ export async function POST(req: Request) {
     // Gagal di sini (500 seragam) bila secret salah konfigurasi — sebelum cek
     // password, agar password benar vs salah tidak bisa dibedakan.
     assertAuthConfigured();
-    const [rows] = await pool.query<AdminRow[]>(
+    const rows = await query<AdminRow>(
       "SELECT id, password_hash, session_version FROM admin_users WHERE username = ? LIMIT 1",
       [username]
     );
@@ -100,9 +99,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     refundRateLimit(rlKey, rl.stamp);
-    const e = err as { code?: string; message?: string };
-    const hint = e.code === "ER_BAD_FIELD_ERROR" ? " — jalankan: npm run db:migrate:session" : "";
-    console.error("POST /api/admin/auth gagal:", (e.code ?? e.message ?? "unknown") + hint);
+    console.error("POST /api/admin/auth gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });
   }
 }

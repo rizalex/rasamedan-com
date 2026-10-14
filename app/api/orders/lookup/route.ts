@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import { dbErrorMessage, placeholders, query } from "@/lib/db";
 import { verifyCaptcha } from "@/lib/turnstile";
 import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
@@ -8,17 +7,18 @@ import { consumeRateLimit, refundRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-interface OrderRow extends RowDataPacket {
+interface OrderRow {
   id: number;
   order_code: string;
   recipient_name: string;
   fulfillment_method: string;
   status: string;
   total_estimate: number | null;
-  created_at: Date;
+  /** ISO-8601 UTC. */
+  created_at: string;
 }
 
-interface OrderItemRow extends RowDataPacket {
+interface OrderItemRow {
   order_id: number;
   product_name: string;
   variant: string | null;
@@ -96,10 +96,9 @@ export async function POST(req: Request) {
       sql += " AND order_code = ?";
       params.push(code);
     }
-    sql += " ORDER BY created_at DESC LIMIT 50";
+    sql += " ORDER BY created_at DESC, id DESC LIMIT 50";
 
-    // execute (prepared): pada error, `err.sql` tidak memuat nomor HP.
-    const [orders] = await pool.execute<OrderRow[]>(sql, params);
+    const orders = await query<OrderRow>(sql, params);
     if (orders.length === 0) {
       // Jatah tetap terpakai (kemungkinan menebak nomor/kode).
       return NextResponse.json({ orders: [] });
@@ -111,9 +110,11 @@ export async function POST(req: Request) {
     refunded = true;
 
     const ids = orders.map((o) => o.id);
-    const [items] = await pool.execute<OrderItemRow[]>(
+    // Maks 50 pesanan (LIMIT di atas) — di bawah batas 100 parameter D1.
+    const items = await query<OrderItemRow>(
       `SELECT order_id, product_name, variant, quantity, unit_price FROM order_items
-        WHERE order_id IN (${ids.map(() => "?").join(", ")})`,
+        WHERE order_id IN (${placeholders(ids.length)})
+        ORDER BY id ASC`,
       ids
     );
 
@@ -137,9 +138,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ orders: result });
   } catch (err) {
     if (!refunded) refundRateLimit(rlKey, rl.stamp);
-    // Log ringkas (kode/pesan) — tanpa objek error mentah yang bisa memuat PII.
-    const e = err as { code?: string; message?: string };
-    console.error("POST /api/orders/lookup gagal:", e.code ?? e.message ?? "unknown");
+    // Log ringkas (pesan singkat) — tanpa objek error mentah yang bisa memuat PII.
+    console.error("POST /api/orders/lookup gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Gagal mengambil data pesanan" }, { status: 500 });
   }
 }

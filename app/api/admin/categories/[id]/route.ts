@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket, ResultSetHeader } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import { dbErrorMessage, execute, query } from "@/lib/db";
 import { getAdminSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-interface CategoryRow extends RowDataPacket {
+interface CategoryRow {
   id: number;
   slug: string;
 }
@@ -23,7 +22,7 @@ export async function PUT(
   }
   const { id } = await params;
   const categoryId = Number(id);
-  if (!Number.isFinite(categoryId)) {
+  if (!Number.isInteger(categoryId) || categoryId < 1) {
     return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
   }
 
@@ -37,18 +36,18 @@ export async function PUT(
   if (!name) {
     return NextResponse.json({ error: "Nama kategori wajib diisi" }, { status: 400 });
   }
+  if (name.length > 100) {
+    return NextResponse.json({ error: "Nama kategori maksimal 100 karakter" }, { status: 400 });
+  }
 
   try {
-    const [res] = await pool.execute<ResultSetHeader>(
-      "UPDATE categories SET name = ? WHERE id = ?",
-      [name, categoryId]
-    );
-    if (res.affectedRows === 0) {
+    const res = await execute("UPDATE categories SET name = ? WHERE id = ?", [name, categoryId]);
+    if (res.changes === 0) {
       return NextResponse.json({ error: "Kategori tidak ditemukan" }, { status: 404 });
     }
     return NextResponse.json({ ok: true, id: categoryId, name });
   } catch (err) {
-    console.error("PUT /api/admin/categories gagal:", err);
+    console.error("PUT /api/admin/categories gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Gagal memperbarui kategori" }, { status: 500 });
   }
 }
@@ -66,12 +65,12 @@ export async function DELETE(
   }
   const { id } = await params;
   const categoryId = Number(id);
-  if (!Number.isFinite(categoryId)) {
+  if (!Number.isInteger(categoryId) || categoryId < 1) {
     return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
   }
 
   try {
-    const [rows] = await pool.query<CategoryRow[]>(
+    const rows = await query<CategoryRow>(
       "SELECT id, slug FROM categories WHERE id = ? LIMIT 1",
       [categoryId]
     );
@@ -80,11 +79,11 @@ export async function DELETE(
     }
     const slug = rows[0].slug;
 
-    const [used] = await pool.query<RowDataPacket[]>(
+    const used = await query<{ n: number }>(
       "SELECT COUNT(*) AS n FROM products WHERE category = ?",
       [slug]
     );
-    const count = Number((used[0] as { n: number }).n);
+    const count = Number(used[0]?.n ?? 0);
     if (count > 0) {
       return NextResponse.json(
         {
@@ -94,10 +93,10 @@ export async function DELETE(
       );
     }
 
-    await pool.execute("DELETE FROM categories WHERE id = ?", [categoryId]);
+    await execute("DELETE FROM categories WHERE id = ?", [categoryId]);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("DELETE /api/admin/categories gagal:", err);
+    console.error("DELETE /api/admin/categories gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Gagal menghapus kategori" }, { status: 500 });
   }
 }

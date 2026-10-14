@@ -1,7 +1,8 @@
 -- ===========================================================================
+-- ARSIP: skema MySQL lama (cPanel, sebelum Skill 24). TIDAK dipakai aplikasi.
+-- Skema aktif ada di migrations/*.sql (D1/SQLite). Disimpan sebagai rujukan
+-- ekspor data production MySQL → D1 (Skill 25).
 -- Rasa Medan - Schema Database (MySQL)
--- Mengikuti PRD bagian 5.2 & daftar tabel SKILLS.md Skill 1:
---   categories, products, product_variants, orders, order_items, admin_users (6 tabel)
 --
 -- Cara pakai (lokal):   npm run db:schema      (butuh `.env` sudah diisi)
 -- Cara pakai (cPanel):  import file ini via phpMyAdmin -> tab Import

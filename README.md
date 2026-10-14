@@ -5,7 +5,7 @@
 Website katalog + pemesanan untuk UMKM oleh-oleh khas Medan. Pelanggan browsing & checkout **tanpa akun/login**; transaksi diselesaikan manual via WhatsApp. Admin mengelola produk, kategori, dan status pesanan via dashboard.
 
 > Source of truth requirement: `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md`
-> Panduan agent: `CLAUDE.md` · Modul kerja: `SKILLS.md` (Skill 1–22) · Deploy: `DEPLOYMENT.md`
+> Panduan agent: `CLAUDE.md` · Modul kerja: `SKILLS.md` (Skill 1–30) · Deploy: `DEPLOYMENT.md`
 
 ## 1. Cara Kerja (Business Flow)
 
@@ -13,7 +13,7 @@ Website katalog + pemesanan untuk UMKM oleh-oleh khas Medan. Pelanggan browsing 
 1. Pelanggan browsing katalog (tanpa login)
 2. Tambah ke keranjang (localStorage)
 3. Checkout → kurir (nama, alamat, kota, catatan, HP) / pickup (nama, HP)
-4. Sistem generate Order ID unik ORD-YYYYMMDD-XXXX, simpan ke MySQL (Menunggu Konfirmasi)
+4. Sistem generate Order ID unik ORD-YYYYMMDD-XXXX, simpan ke database (Menunggu Konfirmasi)
 5. Buka wa.me dengan pesan otomatis (Order ID, item + variasi + qty + berat, metode, data pelanggan)
 6-11. Manual via WA: cek stok → total + ongkir → QR/transfer → verifikasi
 12-15. Admin update status → pelanggan cek di /cek-pesanan via no HP
@@ -30,12 +30,12 @@ Aturan kritis: tanpa akun pelanggan, tanpa payment gateway, tanpa hitung ongkir 
 |---|---|
 | Framework | Next.js 15 (App Router) + React 19, TypeScript |
 | Styling | CSS murni / CSS Modules, mobile-first, CSS variables |
-| DB | MySQL via `mysql2/promise` pool (`lib/db.ts`), parameterized query |
+| DB | Cloudflare D1 (SQLite) via binding `DB` (`lib/db.ts`: `query`/`queryIn`/`execute`/`batch`), parameterized query; skema di `migrations/` |
 | Auth admin | Session cookie HttpOnly ber-HMAC-SHA256 (`lib/auth.ts`, `node:crypto` scrypt, 8 jam), sesi dicabut via `session_version` saat ganti password; Cloudflare Turnstile (login, cek pesanan, checkout; fail-closed di production) + rate-limit 5 gagal/15 mnt; header keamanan + CSP (`next.config.mjs`) |
 | i18n | `I18nProvider` + `locales/id.json`, `locales/en.json` (default `id`; nama/deskripsi produk tetap id) |
 | WA | `lib/whatsapp.ts` → `https://wa.me/<nomor>?text=<encoded>` |
 | SEO | `lib/seo.ts` (canonical, OG/Twitter, hreflang id/en, JSON-LD Product/LocalBusiness/Breadcrumb), `app/sitemap.ts`, `app/robots.ts` |
-| Deploy | cPanel + Passenger, `server.js` sebagai startup file, `next start` standar, `images.unoptimized: true` (tanpa `sharp`) |
+| Deploy | Cloudflare Workers via `@opennextjs/cloudflare` (`npm run preview` / `npm run deploy`), `images.unoptimized: true` (tanpa `sharp`). Production lama masih cPanel sampai cutover Skill 30 |
 
 Palet (`:root`): `--color-primary #14432E`, `--color-secondary #1E5631`, `--color-accent #D4AF37`, `--color-bg #FFF8F0`, `--color-text #2B2B2B`. Merah marun sudah dihapus.
 
@@ -67,21 +67,23 @@ components/
   seo/JsonLd
 lib/ db, products, product-admin, categories, orders, orders-db,
      auth, rate-limit, turnstile, client-ip, image-type, pricing, phone, whatsapp, store, seo, format, slug, i18n
-db/schema.sql · data/dummy-products.json · data/site-info.json
+migrations/0001_init.sql · data/dummy-products.json · data/site-info.json
 locales/id.json · locales/en.json
 public/uploads/ (foto produk, writable) · public/images/ (logo, hero, ornamen)
-scripts/ test-db, apply-schema, seed, seed-categories, seed-admin,
-         migrate-add-weight, repair-order-items
-server.js · next.config.mjs · tsconfig.json
+scripts/ seed, seed-admin (lib/d1.mjs), check-deploy-env, strip-bundle-secrets
+docs/legacy/schema-mysql.sql (arsip skema MySQL lama)
+wrangler.jsonc · open-next.config.ts · cloudflare-env.d.ts · next.config.mjs · tsconfig.json
 ```
 
-## 4. Database (MySQL)
+## 4. Database (Cloudflare D1)
 
-`db/schema.sql` membuat 6 tabel: `categories`, `products`, `product_variants`, `orders`, `order_items`, `admin_users`.
+`migrations/0001_init.sql` (dialek SQLite) membuat 6 tabel: `categories` (berisi Kue/Kering/Sirup), `products`, `product_variants`, `orders`, `order_items`, `admin_users` — plus `login_failures` (disiapkan untuk rate limit D1, Skill 28). Perubahan skema = file migrasi baru `migrations/NNNN_*.sql`; jangan mengedit migrasi yang sudah diterapkan.
+
+Catatan D1: waktu disimpan sebagai teks ISO-8601 UTC (ditampilkan WIB); kolom username/slug/kategori/`order_code` memakai `COLLATE NOCASE` (tidak peka huruf besar/kecil, sama seperti MySQL dulu); maks 100 parameter per query (`queryIn` memecah `IN` panjang); transaksi = `batch()` (D1 tidak mendukung BEGIN/COMMIT).
 
 - `products`: slug unik, category (slug string, divalidasi ke `categories`), price (Rp integer), `weight_grams` (Skill 13), `stock_status` (`tersedia|terbatas|pre-order|tanya-stok`), `is_halal`, `image` (`/uploads/...`), `is_featured`
 - `product_variants`: `product_id` FK cascade, `price_delta` (harga varian = harga produk + selisih, boleh minus), `weight_grams` (0 = fallback ke produk), `position` — semuanya diisi lewat editor varian di form admin
-- `orders`: `order_code` unik, `phone` terindeks, `fulfillment_method` (`kurir|pickup`), `status` ENUM 9 nilai, `total_estimate` (tanpa ongkir)
+- `orders`: `order_code` unik, `phone` terindeks, `fulfillment_method` (`kurir|pickup`), `status` CHECK 9 nilai baku, `total_estimate` (tanpa ongkir); order + items disimpan atomik dalam satu `batch()`
 - `order_items`: snapshot `product_name` + `unit_price` saat pesan (tahan hapus produk), FK order cascade / produk set-null
 - `categories`: `slug` unik; hapus ditolak bila masih dipakai produk (cek level aplikasi)
 - `admin_users`: `username` unik, `password_hash` format `salt:hash` (scrypt)
@@ -90,22 +92,21 @@ server.js · next.config.mjs · tsconfig.json
 
 ```bash
 npm install
-cp .env.example .env   # isi kredensial (jangan commit .env)
-npm run db:test        # tes koneksi MySQL
-npm run db:schema      # import schema
-npm run db:migrate:session  # DB lama: tambah admin_users.session_version (wajib, idempoten)
+cp .env.example .env   # isi nilai lokal (jangan commit .env)
+npm run db:migrate     # buat tabel di D1 LOKAL (.wrangler/state), tanpa akun Cloudflare
 npm run seed           # 9 produk dummy (tolak bila produk sudah ada; --force untuk timpa)
 ADMIN_USERNAME=admin ADMIN_PASSWORD=<kuat> npm run seed:admin
-npm run dev            # http://localhost:3000
+npm run dev            # http://localhost:3000 (next dev memakai D1 lokal yang sama)
 ```
 
-Build/prod check (wajib lolos sebelum deploy cPanel): `npm run build && npm start`
+Semua perintah DB menuju D1 **lokal** secara default; target production wajib eksplisit: `npm run db:migrate:remote`, `npm run seed:admin -- --remote`. Reset DB lokal: hapus folder `.wrangler/state` lalu ulangi `db:migrate`.
+
+Cek runtime Workers lokal: `npm run preview` (http://localhost:8787, memakai D1 lokal + `.dev.vars`). Setelah mengubah `wrangler.jsonc` atau menambah secret di `.dev.vars.example`: `npm run cf:typegen`.
 
 ## 6. Environment Variables
 
 | Var | Keterangan |
 |---|---|
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME` | MySQL |
 | `NEXT_PUBLIC_WA_NUMBER` | WA utama pemesanan, tanpa `+` (dev: dummy `62812...`) |
 | `NEXT_PUBLIC_WA_NUMBER_ALT` | WA alternatif layanan umum (opsional) |
 | `ADMIN_SESSION_SECRET` | Secret HMAC sesi (acak panjang) |
@@ -127,7 +128,7 @@ Build/prod check (wajib lolos sebelum deploy cPanel): `npm run build && npm star
 
 ## 8. Deploy (ringkas)
 
-Lihat `DEPLOYMENT.md`. Intinya: buat DB + import `db/schema.sql` via phpMyAdmin, isi env di panel Node.js App, startup file `server.js`, Node 18+, aktifkan SSL (wajib untuk cookie `secure`), pastikan `public/uploads` writable, kerjakan checklist go-live (ganti WA dummy, secret, password admin, tes checkout → WA → cek status → admin login).
+Target: Cloudflare Workers (migrasi Skill 23–30; panduan lengkap ditulis ulang di Skill 29). Urutan saat ini: `npx wrangler d1 create rasamedan` → salin `database_id` ke `wrangler.jsonc` → `npm run db:migrate:remote` → `npm run seed:admin -- --remote` → isi `TURNSTILE_SITE_KEY` + secret (`wrangler secret put`) → `npm run deploy` (diblokir `scripts/check-deploy-env.mjs` bila konfigurasi belum lengkap). `DEPLOYMENT.md` masih versi cPanel (hanya untuk hotfix dari commit `fb4ea12`).
 
 ## 9. Peta Dokumen
 

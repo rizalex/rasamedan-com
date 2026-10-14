@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import { dbErrorMessage, execute, query } from "@/lib/db";
 import {
   getAdminSession,
   verifyPassword,
@@ -12,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const MIN_PASSWORD_LEN = 8;
 
-interface AdminRow extends RowDataPacket {
+interface AdminRow {
   id: number;
   username: string;
   password_hash: string;
@@ -65,7 +64,7 @@ export async function PUT(req: Request) {
   }
 
   try {
-    const [rows] = await pool.query<AdminRow[]>(
+    const rows = await query<AdminRow>(
       "SELECT id, username, password_hash FROM admin_users WHERE id = ? LIMIT 1",
       [session.sub]
     );
@@ -98,7 +97,7 @@ export async function PUT(req: Request) {
           { status: 400 }
         );
       }
-      const [dupe] = await pool.query<AdminRow[]>(
+      const dupe = await query<AdminRow>(
         "SELECT id FROM admin_users WHERE username = ? AND id <> ? LIMIT 1",
         [newUsername, admin.id]
       );
@@ -149,7 +148,7 @@ export async function PUT(req: Request) {
     }
 
     params.push(admin.id);
-    await pool.query(
+    await execute(
       `UPDATE admin_users SET ${setClauses.join(", ")} WHERE id = ?`,
       params
     );
@@ -162,9 +161,8 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ ok: true, usernameChanged, passwordChanged });
   } catch (err) {
-    // Log ringkas: objek error pool.query() memuat SQL berisi hash password baru.
-    const e = err as { code?: string; message?: string };
-    console.error("PUT /api/admin/account gagal:", e.code ?? e.message ?? "unknown");
+    // Log ringkas: jangan log objek error utuh (parameter memuat hash password baru).
+    console.error("PUT /api/admin/account gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });
   }
 }

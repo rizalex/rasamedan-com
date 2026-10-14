@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
-import type { PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import {
+  batch,
+  dbErrorMessage,
+  execute,
+  isUniqueViolation,
+  placeholders,
+  query,
+  statement,
+} from "@/lib/db";
 import type { CheckoutItem, FulfillmentMethod } from "@/lib/orders";
 import { verifyCaptcha } from "@/lib/turnstile";
 import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
@@ -39,14 +46,14 @@ function dateWibYYYYMMDD(): string {
   return s.replace(/-/g, "");
 }
 
-interface ProductRow extends RowDataPacket {
+interface ProductRow {
   id: number;
   name: string;
   price: number;
   weight_grams: number;
 }
 
-interface VariantRow extends RowDataPacket {
+interface VariantRow {
   product_id: number;
   name: string;
   price_delta: number;
@@ -188,23 +195,19 @@ export async function POST(req: Request) {
   const quota = consumeRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
   if (quota.limited) return tooManyOrders(quota.retryAfterSec);
 
-  let conn: PoolConnection | null = null;
   try {
-    conn = await pool.getConnection();
-
     // Ambil nama & harga produk dari DB (jangan percaya harga dari client).
-    // Placeholder eksplisit per id (bukan `IN (?)` array khusus mysql2) agar
-    // query tetap valid saat pindah ke D1 (Skill 24).
+    // Maks 50 id unik (batas baris di atas) — di bawah batas 100 parameter D1.
     const ids = [...new Set(items.map((it) => it.productId))];
-    const idPlaceholders = ids.map(() => "?").join(", ");
-    const [productRows] = await conn.execute<ProductRow[]>(
+    const idPlaceholders = placeholders(ids.length);
+    const productRows = await query<ProductRow>(
       `SELECT id, name, price, weight_grams FROM products WHERE id IN (${idPlaceholders})`,
       ids
     );
     const byId = new Map(productRows.map((p) => [p.id, p]));
 
     // Varian per produk: selisih harga & berat (override). Dicocokkan per nama.
-    const [variantRows] = await conn.execute<VariantRow[]>(
+    const variantRows = await query<VariantRow>(
       `SELECT product_id, name, price_delta, weight_grams FROM product_variants
         WHERE product_id IN (${idPlaceholders})`,
       ids
@@ -270,8 +273,9 @@ export async function POST(req: Request) {
       (sum, it) => sum + it.unit_price * it.quantity,
       0
     );
-    // Kolom total_estimate INT UNSIGNED: tolak sebelum INSERT agar tidak
-    // berujung error DB (yang mengembalikan jatah kuota) atau nilai terpotong.
+    // Batas wajar total (setara INT UNSIGNED skema lama, juga menjaga data saat
+    // ekspor balik): tolak sebelum INSERT agar tidak berujung error DB (yang
+    // mengembalikan jatah kuota).
     if (totalEstimate > 4_294_967_295) {
       return NextResponse.json(
         { error: "Total pesanan terlalu besar" },
@@ -283,66 +287,93 @@ export async function POST(req: Request) {
       0
     );
 
-    await conn.beginTransaction();
-
-    // Generate Order ID unik: retry pada UNIQUE constraint (aman dari race).
+    // Generate Order ID unik: nomor urut berikutnya hari ini (WIB), lalu retry
+    // bila UNIQUE order_code bentrok dengan request bersamaan.
     const prefix = `ORD-${dateWibYYYYMMDD()}-`;
-    const [maxRows] = await conn.query<RowDataPacket[]>(
-      "SELECT order_code FROM orders WHERE order_code LIKE ? ORDER BY order_code DESC LIMIT 1",
-      [`${prefix}%`]
+    // Nomor urut dibandingkan sebagai angka (bukan string) agar tetap benar
+    // bila suatu hari melewati 9999.
+    const maxRows = await query<{ seq: number | null }>(
+      "SELECT MAX(CAST(substr(order_code, ?) AS INTEGER)) AS seq FROM orders WHERE order_code LIKE ?",
+      [prefix.length + 1, `${prefix}%`]
     );
-    let seq =
-      maxRows.length > 0
-        ? parseInt(String(maxRows[0].order_code).slice(-4), 10) + 1
-        : 1;
+    let seq = Number(maxRows[0]?.seq ?? 0) + 1;
 
-    let orderId = 0;
+    // Semua item sebagai satu parameter JSON yang dibuat server (bukan input
+    // mentah klien): disisipkan dengan SATU statement lewat json_each, sehingga
+    // checkout selalu 2 statement berapa pun jumlah baris — paket Free D1
+    // membatasi 50 query per invocation Worker.
+    const itemsJson = JSON.stringify(
+      orderItems.map((it) => ({
+        p: it.productId,
+        n: it.name,
+        v: it.variant,
+        q: it.quantity,
+        u: it.unit_price,
+      }))
+    );
+
     let orderCode = "";
-    for (let attempt = 0; attempt < 20; attempt++) {
+    let saved = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
       orderCode = `${prefix}${String(seq).padStart(4, "0")}`;
       try {
-        const [res] = await conn.execute<ResultSetHeader>(
-          `INSERT INTO orders
-             (order_code, recipient_name, phone, fulfillment_method,
-              address, city, location_note, status, total_estimate, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'Menunggu Konfirmasi', ?, ?)`,
-          [
-            orderCode,
-            recipientName,
-            phoneNorm,
-            method,
-            address,
-            city,
-            locationNote,
-            totalEstimate,
-            note,
-          ]
-        );
-        orderId = res.insertId;
+        // Order + semua item dalam satu batch D1 (atomik): gagal di mana pun →
+        // tidak ada pesanan setengah jadi. Item merujuk pesanan lewat order_code
+        // karena id baru belum diketahui sebelum batch berjalan.
+        const [, itemsRes] = await batch([
+          statement(
+            `INSERT INTO orders
+               (order_code, recipient_name, phone, fulfillment_method,
+                address, city, location_note, status, total_estimate, note)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'Menunggu Konfirmasi', ?, ?)`,
+            [
+              orderCode,
+              recipientName,
+              phoneNorm,
+              method,
+              address,
+              city,
+              locationNote,
+              totalEstimate,
+              note,
+            ]
+          ),
+          // Snapshot nama & harga saat pesan, urut sesuai keranjang.
+          statement(
+            `INSERT INTO order_items
+               (order_id, product_id, product_name, variant, quantity, unit_price)
+             SELECT o.id,
+                    json_extract(j.value, '$.p'),
+                    json_extract(j.value, '$.n'),
+                    json_extract(j.value, '$.v'),
+                    json_extract(j.value, '$.q'),
+                    json_extract(j.value, '$.u')
+               FROM orders o, json_each(?) j
+              WHERE o.order_code = ?
+              ORDER BY j.key`,
+            [itemsJson, orderCode]
+          ),
+        ]);
+        // Pengaman: semua item harus tersimpan (bila tidak, pesanan dibatalkan).
+        if (itemsRes.meta.changes !== orderItems.length) {
+          await execute("DELETE FROM orders WHERE order_code = ?", [orderCode]);
+          throw new Error(
+            `Item pesanan tersimpan ${itemsRes.meta.changes}/${orderItems.length}`
+          );
+        }
+        saved = true;
         break;
       } catch (err: unknown) {
-        if ((err as { code?: string }).code === "ER_DUP_ENTRY") {
+        if (isUniqueViolation(err)) {
           seq++;
           continue;
         }
         throw err;
       }
     }
-    if (!orderId) {
+    if (!saved) {
       throw new Error("Gagal membuat Order ID unik setelah beberapa percobaan");
     }
-
-    // Insert order_items (snapshot nama & harga).
-    for (const it of orderItems) {
-      await conn.execute(
-        `INSERT INTO order_items
-           (order_id, product_id, product_name, variant, quantity, unit_price)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, it.productId, it.name, it.variant, it.quantity, it.unit_price]
-      );
-    }
-
-    await conn.commit();
 
     return NextResponse.json({
       order_code: orderCode,
@@ -352,21 +383,11 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     refundRateLimit(orderKey, quota.stamp);
-    if (conn) {
-      try {
-        await conn.rollback();
-      } catch {
-        /* abaikan */
-      }
-    }
-    // Log ringkas (kode/pesan), bukan objek error utuh — konsisten dengan GET.
-    const e = err as { code?: string; message?: string };
-    console.error("POST /api/orders gagal:", e.code ?? e.message ?? "unknown");
+    // Log ringkas (pesan singkat), bukan objek error utuh yang bisa memuat PII.
+    console.error("POST /api/orders gagal:", dbErrorMessage(err));
     return NextResponse.json(
       { error: "Gagal menyimpan pesanan. Silakan coba lagi." },
       { status: 500 }
     );
-  } finally {
-    if (conn) conn.release();
   }
 }

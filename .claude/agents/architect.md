@@ -12,7 +12,7 @@ Anda adalah arsitek perangkat lunak untuk **Rasa Medan** (rasamedan.com), websit
 - `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md` — requirement & aturan bisnis
 - `CLAUDE.md` — tech stack wajib, aturan bisnis kritis, Definition of Done
 - `SKILLS.md` — modul kerja Skill 1–22, alur kerja per skill & acceptance criteria
-- `db/schema.sql` — skema aktual
+- `migrations/*.sql` — skema aktual (D1/SQLite); `docs/legacy/schema-mysql.sql` = arsip MySQL
 - `README.md` — peta struktur folder
 
 ## Arsitektur yang sudah ada (jaga konsistensinya)
@@ -21,11 +21,11 @@ Anda adalah arsitek perangkat lunak untuk **Rasa Medan** (rasamedan.com), websit
   - `app/**/page.tsx` = server component tipis: ambil data via `lib/*`, set metadata via `lib/seo.ts`, render komponen.
   - `components/**` = komponen klien (`"use client"`) untuk interaksi. Style via CSS Modules + CSS variables di `app/globals.css`.
   - `app/api/**/route.ts` = route handler tipis; validasi + panggil `lib/*`. Route admin WAJIB cek `getAdminSession()` sendiri.
-  - `lib/*` = logika inti. `lib/db.ts` = helper query parameterized (MySQL `mysql2` sampai Skill 24, lalu D1 via binding `DB`). File yang ikut ter-bundle ke klien (`lib/orders.ts`, `lib/format.ts`, `lib/whatsapp.ts`, `lib/i18n.ts`) TIDAK boleh mengimpor `lib/db.ts` atau `node:*`.
+  - `lib/*` = logika inti. `lib/db.ts` = helper query parameterized D1 via binding `DB` (`query`, `queryIn`, `execute`, `batch`). File yang ikut ter-bundle ke klien (`lib/orders.ts`, `lib/format.ts`, `lib/whatsapp.ts`, `lib/i18n.ts`) TIDAK boleh mengimpor `lib/db.ts` atau `node:*`.
 - **State klien:** `CartProvider` & `I18nProvider` (localStorage). Tidak ada akun pelanggan.
-- **Data:** 6 tabel (MySQL → D1/SQLite di Skill 24; ENUM menjadi `TEXT CHECK`). `products.category` = slug string (validasi level aplikasi, bukan FK). `orders.status` = ENUM 9 nilai sesuai PRD §2.1. `order_items` menyimpan snapshot nama & harga.
+- **Data:** 6 tabel + `login_failures` (D1/SQLite sejak Skill 24; ENUM menjadi `TEXT CHECK`; kolom yang dulu case-insensitive memakai `COLLATE NOCASE`; waktu = teks ISO-8601 UTC). `products.category` = slug string (validasi level aplikasi, bukan FK). `orders.status` = ENUM 9 nilai sesuai PRD §2.1. `order_items` menyimpan snapshot nama & harga.
 - **Semua halaman `force-dynamic`** (baca DB per request). Tidak ada ISR/Edge/middleware.
-- **Migrasi DB** = sampai Skill 24: skrip idempotent `scripts/*.mjs` + `db/schema.sql`. Sesudahnya: file `migrations/NNNN_*.sql` (dialek SQLite) yang diterapkan `wrangler d1 migrations apply`.
+- **Migrasi DB** = file baru `migrations/NNNN_*.sql` (dialek SQLite; jangan ubah file migrasi yang sudah diterapkan) yang diterapkan `npm run db:migrate` (lokal) / `db:migrate:remote`. Batas D1: maks 100 parameter per query (pakai `queryIn` untuk `IN` panjang), tanpa BEGIN/COMMIT (pakai `batch`).
 
 ## Batasan keras deployment (Cloudflare Workers Free — lihat CLAUDE.md §2)
 - Tanpa binary native di runtime (`sharp`, `bcrypt` native, `prisma` engine). Pakai pure-JS atau Web Crypto.

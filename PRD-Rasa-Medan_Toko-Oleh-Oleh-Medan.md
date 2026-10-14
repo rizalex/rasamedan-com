@@ -164,12 +164,12 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 
 ### 5.1 Tech Stack
 - **Frontend**: Next.js, HTML5, CSS, JavaScript
-- **Database**: MySQL
+- **Database**: Cloudflare D1 (SQLite) — semula MySQL, dimigrasi di Skill 24 (14 Okt 2026); skema aktual di `migrations/`
 - **Autentikasi Admin**: session/JWT sederhana (hanya untuk admin, bukan pelanggan)
 - **Penyimpanan Foto Produk**: folder upload lokal atau storage cloud (disarankan cloud agar scalable, mis. Cloudinary/S3 — keputusan bisa menyesuaikan hosting)
 - **Integrasi WhatsApp**: link `wa.me/<nomor>?text=<pesan encoded>` (tanpa API berbayar untuk MVP)
 
-### 5.2 Skema Data Utama (Gambaran Tabel MySQL)
+### 5.2 Skema Data Utama (Gambaran Tabel; implementasi aktual: `migrations/0001_init.sql`)
 - `products`: id, nama, kategori, harga, deskripsi, bahan, label_halal, status_stok, foto_url, variasi (json/tabel relasi)
 - `orders`: id, order_code (Order ID unik), nama_penerima, no_hp, metode_pengambilan (kurir/pickup), alamat, catatan_lokasi, status, total_estimasi, created_at
 - `order_items`: id, order_id, product_id, variasi, jumlah, harga_satuan

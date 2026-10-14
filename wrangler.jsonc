@@ -38,20 +38,23 @@
   // `npm run deploy` — sehingga rahasia .env lokal tidak bisa ikut ter-upload.
   "build": {
     "command": "node scripts/strip-bundle-secrets.mjs"
-  }
+  },
+
+  // Database D1 (Skill 24). `database_id` di bawah adalah PLACEHOLDER: cukup
+  // untuk D1 lokal (`next dev`, `npm run preview`, `npm run db:migrate`), tetapi
+  // `npm run deploy` menolak jalan sampai diganti. Pemilik: jalankan
+  // `npx wrangler d1 create rasamedan` lalu salin `database_id` hasilnya ke sini.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rasamedan",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
 
   // Binding berikut sengaja dikomentari: `wrangler deploy` gagal bila resource
   // belum dibuat. Aktifkan di skill terkait setelah pemilik membuatnya.
-  //
-  // Skill 24 — setelah `npx wrangler d1 create rasamedan`:
-  // "d1_databases": [
-  //   {
-  //     "binding": "DB",
-  //     "database_name": "rasamedan",
-  //     "database_id": "<ISI-DI-SKILL-24>",
-  //     "migrations_dir": "migrations"
-  //   }
-  // ],
   //
   // Skill 27 — setelah bucket R2 dibuat:
   // "r2_buckets": [

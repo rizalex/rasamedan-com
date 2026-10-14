@@ -20,11 +20,12 @@ const STATUSES = [
 export default async function AdminOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string | string[]; q?: string | string[] }>;
 }) {
   const sp = await searchParams;
-  const status = sp.status ?? "";
-  const q = sp.q ?? "";
+  // Parameter berulang (?q=a&q=b) menjadi array — ambil string saja.
+  const status = typeof sp.status === "string" ? sp.status : "";
+  const q = typeof sp.q === "string" ? sp.q : "";
   const orders = await getAdminOrders({ status, q });
 
   return (

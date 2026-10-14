@@ -1,21 +1,16 @@
-import type { RowDataPacket } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import { query } from "@/lib/db";
 import { getAdminSession } from "@/lib/auth";
 import AccountSettingsForm from "@/components/admin/AccountSettingsForm";
 import styles from "@/components/admin/admin.module.css";
 
 export const dynamic = "force-dynamic";
 
-interface AdminRow extends RowDataPacket {
-  username: string;
-}
-
 export default async function AdminSettingsPage() {
   const session = await getAdminSession();
   // Layout (protected) sudah menjaga, tapi ambil username untuk prefill.
   let currentUsername = "";
   if (session) {
-    const [rows] = await pool.query<AdminRow[]>(
+    const rows = await query<{ username: string }>(
       "SELECT username FROM admin_users WHERE id = ? LIMIT 1",
       [session.sub]
     );

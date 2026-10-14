@@ -7,8 +7,7 @@ import {
 } from "node:crypto";
 import { cookies } from "next/headers";
 import { cache } from "react";
-import type { RowDataPacket } from "mysql2";
-import { query } from "@/lib/db";
+import { dbErrorMessage, query } from "@/lib/db";
 
 /**
  * Auth admin sederhana (bukan untuk pelanggan).
@@ -128,10 +127,6 @@ export function verifySessionToken(
   }
 }
 
-interface SessionVersionRow extends RowDataPacket {
-  session_version: number;
-}
-
 // ---- Cookie helpers (Next 15: cookies() is async) ----
 /**
  * Sesi admin aktif, atau null. Selain tanda tangan & kedaluwarsa, versi sesi
@@ -144,16 +139,14 @@ export const getAdminSession = cache(async (): Promise<{ sub: number } | null> =
   const token = verifySessionToken(store.get(SESSION_COOKIE)?.value);
   if (!token) return null;
   try {
-    const rows = await query<SessionVersionRow[]>(
+    const rows = await query<{ session_version: number }>(
       "SELECT session_version FROM admin_users WHERE id = ? LIMIT 1",
       [token.sub]
     );
     if (rows.length === 0 || Number(rows[0].session_version) !== token.ver) return null;
     return { sub: token.sub };
   } catch (err) {
-    const e = err as { code?: string; message?: string };
-    const hint = e.code === "ER_BAD_FIELD_ERROR" ? " — jalankan: npm run db:migrate:session" : "";
-    console.error("[auth] Gagal memeriksa versi sesi:", (e.code ?? e.message ?? "unknown") + hint);
+    console.error("[auth] Gagal memeriksa versi sesi:", dbErrorMessage(err));
     return null;
   }
 });

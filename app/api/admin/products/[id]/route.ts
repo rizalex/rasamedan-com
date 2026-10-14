@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import type { PoolConnection, RowDataPacket } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import { batch, dbErrorMessage, execute, isUniqueViolation, query, statement } from "@/lib/db";
 import { getAdminSession } from "@/lib/auth";
-import { validateProductInput, replaceVariants } from "@/lib/product-admin";
+import { validateProductInput, variantInsertStatements } from "@/lib/product-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +15,7 @@ export async function PUT(
   }
   const { id } = await params;
   const productId = Number(id);
-  if (!Number.isFinite(productId)) {
+  if (!Number.isInteger(productId) || productId < 1) {
     return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
   }
 
@@ -31,16 +30,20 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
   const p = parsed.value;
+  const slugTaken = () =>
+    NextResponse.json(
+      { error: `Slug "${p.slug}" sudah dipakai produk lain.` },
+      { status: 400 }
+    );
 
-  let conn: PoolConnection | null = null;
   try {
-    conn = await pool.getConnection();
+    const existing = await query("SELECT id FROM products WHERE id = ? LIMIT 1", [productId]);
+    if (existing.length === 0) {
+      return NextResponse.json({ error: "Produk tidak ditemukan" }, { status: 404 });
+    }
 
     // Kategori harus terdaftar (validasi terhadap tabel categories — Skill 14).
-    const [catRows] = await conn.query<RowDataPacket[]>(
-      "SELECT id FROM categories WHERE slug = ? LIMIT 1",
-      [p.category]
-    );
+    const catRows = await query("SELECT id FROM categories WHERE slug = ? LIMIT 1", [p.category]);
     if (catRows.length === 0) {
       return NextResponse.json(
         { error: `Kategori "${p.category}" tidak terdaftar.` },
@@ -49,50 +52,46 @@ export async function PUT(
     }
 
     // Slug unik kecuali milik produk ini sendiri.
-    const [dup] = await conn.query<RowDataPacket[]>(
-      "SELECT id FROM products WHERE slug = ? AND id <> ? LIMIT 1",
-      [p.slug, productId]
-    );
-    if (dup.length > 0) {
-      return NextResponse.json(
-        { error: `Slug "${p.slug}" sudah dipakai produk lain.` },
-        { status: 400 }
-      );
-    }
+    const dup = await query("SELECT id FROM products WHERE slug = ? AND id <> ? LIMIT 1", [
+      p.slug,
+      productId,
+    ]);
+    if (dup.length > 0) return slugTaken();
 
-    await conn.beginTransaction();
-    await conn.execute(
-      `UPDATE products SET slug=?, name=?, category=?, price=?, weight_grams=?, stock_status=?,
-              is_halal=?, is_featured=?, description=?, ingredients=?, image=?
-        WHERE id=?`,
-      [
-        p.slug,
-        p.name,
-        p.category,
-        p.price,
-        p.weight_grams,
-        p.stock_status,
-        p.is_halal ? 1 : 0,
-        p.is_featured ? 1 : 0,
-        p.description,
-        p.ingredients,
-        p.image,
-        productId,
-      ]
-    );
-    await replaceVariants(conn, productId, p.variants);
-    await conn.commit();
+    // Update produk + ganti seluruh varian dalam satu batch (atomik). Bila produk
+    // terhapus di antara cek di atas dan batch ini: dengan varian, INSERT gagal
+    // karena FK dan batch dibatalkan; tanpa varian, UPDATE mengenai 0 baris → 404.
+    const [updated] = await batch([
+      statement(
+        `UPDATE products SET slug=?, name=?, category=?, price=?, weight_grams=?, stock_status=?,
+                is_halal=?, is_featured=?, description=?, ingredients=?, image=?
+          WHERE id=?`,
+        [
+          p.slug,
+          p.name,
+          p.category,
+          p.price,
+          p.weight_grams,
+          p.stock_status,
+          p.is_halal ? 1 : 0,
+          p.is_featured ? 1 : 0,
+          p.description,
+          p.ingredients,
+          p.image,
+          productId,
+        ]
+      ),
+      statement("DELETE FROM product_variants WHERE product_id = ?", [productId]),
+      ...variantInsertStatements({ id: productId }, p.variants),
+    ]);
+    if (updated.meta.changes === 0) {
+      return NextResponse.json({ error: "Produk tidak ditemukan" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true, id: productId, slug: p.slug });
   } catch (err) {
-    if (conn) {
-      try {
-        await conn.rollback();
-      } catch {}
-    }
-    console.error("PUT /api/admin/products gagal:", err);
+    if (isUniqueViolation(err)) return slugTaken();
+    console.error("PUT /api/admin/products gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Gagal memperbarui produk" }, { status: 500 });
-  } finally {
-    if (conn) conn.release();
   }
 }
 
@@ -106,14 +105,14 @@ export async function DELETE(
   }
   const { id } = await params;
   const productId = Number(id);
-  if (!Number.isFinite(productId)) {
+  if (!Number.isInteger(productId) || productId < 1) {
     return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
   }
   try {
-    await pool.execute("DELETE FROM products WHERE id = ?", [productId]);
+    await execute("DELETE FROM products WHERE id = ?", [productId]);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("DELETE /api/admin/products gagal:", err);
+    console.error("DELETE /api/admin/products gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Gagal menghapus produk" }, { status: 500 });
   }
 }

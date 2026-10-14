@@ -1,5 +1,4 @@
 import { query } from "@/lib/db";
-import type { RowDataPacket } from "mysql2";
 import { slugify } from "@/lib/slug";
 
 /** Kategori produk dinamis (Skill 14). `products.category` menyimpan `slug`. */
@@ -18,7 +17,7 @@ const FALLBACK: Category[] = [
   { id: 3, name: "Sirup", slug: "sirup" },
 ];
 
-interface CategoryRow extends RowDataPacket {
+interface CategoryRow {
   id: number;
   name: string;
   slug: string;
@@ -31,7 +30,7 @@ interface CategoryCountRow extends CategoryRow {
 /** Semua kategori (urut sesuai urutan dibuat). Dipakai katalog, beranda, form. */
 export async function getAllCategories(): Promise<Category[]> {
   try {
-    const rows = await query<CategoryRow[]>(
+    const rows = await query<CategoryRow>(
       "SELECT id, name, slug FROM categories ORDER BY id ASC"
     );
     if (rows.length === 0) return FALLBACK;
@@ -43,7 +42,7 @@ export async function getAllCategories(): Promise<Category[]> {
 
 /** Kategori asli dari DB untuk form admin — tanpa fallback; error DB dilempar. */
 export async function getAdminCategories(): Promise<Category[]> {
-  const rows = await query<CategoryRow[]>(
+  const rows = await query<CategoryRow>(
     "SELECT id, name, slug FROM categories ORDER BY id ASC"
   );
   return rows.map((r) => ({ id: r.id, name: r.name, slug: r.slug }));
@@ -51,7 +50,7 @@ export async function getAdminCategories(): Promise<Category[]> {
 
 /** Kategori + jumlah produk yang memakainya (untuk halaman admin & cek hapus). */
 export async function getCategoriesWithCounts(): Promise<CategoryWithCount[]> {
-  const rows = await query<CategoryCountRow[]>(
+  const rows = await query<CategoryCountRow>(
     `SELECT c.id, c.name, c.slug, COUNT(p.id) AS product_count
        FROM categories c
        LEFT JOIN products p ON p.category = c.slug

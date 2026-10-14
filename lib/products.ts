@@ -1,6 +1,5 @@
-import { query } from "@/lib/db";
+import { dbErrorMessage, query, queryIn } from "@/lib/db";
 import dummyProducts from "@/data/dummy-products.json";
-import type { RowDataPacket } from "mysql2";
 
 export type StockStatus = "tersedia" | "terbatas" | "pre-order" | "tanya-stok";
 
@@ -29,7 +28,7 @@ export type Product = {
   variants: ProductVariant[];
 };
 
-interface ProductRow extends RowDataPacket {
+interface ProductRow {
   id: number;
   slug: string;
   name: string;
@@ -44,7 +43,7 @@ interface ProductRow extends RowDataPacket {
   image: string | null;
 }
 
-interface VariantRow extends RowDataPacket {
+interface VariantRow {
   product_id: number;
   name: string;
   price_delta: number;
@@ -72,19 +71,14 @@ function rowToProduct(row: ProductRow, variants: ProductVariant[]): Product {
   };
 }
 
-/**
- * Ambil varian untuk sekumpulan produk, dikelompokkan per product_id.
- * Placeholder `?` dibuat eksplisit per id (bukan `IN (?)` dengan array, yang
- * khusus mysql2) agar query ini tetap valid saat pindah ke D1 (Skill 24).
- */
+/** Ambil varian untuk sekumpulan produk, dikelompokkan per product_id. */
 async function loadVariants(productIds: number[]): Promise<Map<number, ProductVariant[]>> {
   const byProduct = new Map<number, ProductVariant[]>();
   if (productIds.length === 0) return byProduct;
-  const placeholders = productIds.map(() => "?").join(", ");
-  const rows = await query<VariantRow[]>(
-    `SELECT product_id, name, price_delta, weight_grams
+  const rows = await queryIn<VariantRow>(
+    (ph) => `SELECT product_id, name, price_delta, weight_grams
        FROM product_variants
-      WHERE product_id IN (${placeholders})
+      WHERE product_id IN (${ph})
       ORDER BY product_id ASC, position ASC, id ASC`,
     productIds
   );
@@ -126,7 +120,7 @@ function normalizeDummyVariants(raw: unknown): ProductVariant[] {
  * Di-`import` statis, bukan dibaca via `node:fs` (Workers tidak punya filesystem).
  */
 function readDummy(reason: unknown): Product[] {
-  console.error("[products] DB tidak tersedia:", reason);
+  console.error("[products] DB tidak tersedia:", dbErrorMessage(reason));
   if (process.env.NODE_ENV === "production") {
     throw new Error("Database produk tidak tersedia");
   }
@@ -155,7 +149,7 @@ function readDummy(reason: unknown): Product[] {
  */
 export async function getProductBySlug(slug: string): Promise<Product | null> {
   try {
-    const rows = await query<ProductRow[]>(
+    const rows = await query<ProductRow>(
       `SELECT ${PRODUCT_COLUMNS} FROM products WHERE slug = ? LIMIT 1`,
       [slug]
     );
@@ -169,7 +163,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 
 /** Ambil satu produk berdasarkan id (untuk form edit admin). */
 export async function getProductById(id: number): Promise<Product | null> {
-  const rows = await query<ProductRow[]>(
+  const rows = await query<ProductRow>(
     `SELECT ${PRODUCT_COLUMNS} FROM products WHERE id = ? LIMIT 1`,
     [id]
   );
@@ -183,7 +177,7 @@ export async function getProductById(id: number): Promise<Product | null> {
  */
 export async function getAllProducts(): Promise<Product[]> {
   try {
-    const rows = await query<ProductRow[]>(
+    const rows = await query<ProductRow>(
       `SELECT ${PRODUCT_COLUMNS} FROM products ORDER BY category ASC, name ASC`
     );
     return await withVariants(rows);
@@ -197,19 +191,19 @@ export async function getAllProducts(): Promise<Product[]> {
  * Bila belum ada yang ditandai, tampilkan produk terbaru agar beranda tidak kosong.
  */
 export async function getFeaturedProducts(limit = 6): Promise<Product[]> {
-  // LIMIT di-inline sebagai integer tersanitasi: mysql2 execute() bermasalah
-  // dengan placeholder `?` pada LIMIT. `limit` internal (bukan input user).
   const safeLimit = Math.max(1, Math.floor(limit));
   try {
-    let rows = await query<ProductRow[]>(
+    let rows = await query<ProductRow>(
       `SELECT ${PRODUCT_COLUMNS} FROM products
         WHERE is_featured = 1
         ORDER BY id DESC
-        LIMIT ${safeLimit}`
+        LIMIT ?`,
+      [safeLimit]
     );
     if (rows.length === 0) {
-      rows = await query<ProductRow[]>(
-        `SELECT ${PRODUCT_COLUMNS} FROM products ORDER BY id DESC LIMIT ${safeLimit}`
+      rows = await query<ProductRow>(
+        `SELECT ${PRODUCT_COLUMNS} FROM products ORDER BY id DESC LIMIT ?`,
+        [safeLimit]
       );
     }
     return await withVariants(rows);

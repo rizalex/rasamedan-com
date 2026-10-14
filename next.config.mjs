@@ -1,7 +1,15 @@
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 const isDev = process.env.NODE_ENV !== "production";
+
+// `next dev`: sediakan binding wrangler.jsonc (D1 lokal di .wrangler/state) ke
+// getCloudflareContext() — Skill 24. Tidak dijalankan saat `next build`.
+// Isi DB lokal dulu: npm run db:migrate (lalu seed, lihat README).
+if (process.env.NODE_ENV === "development") {
+  initOpenNextCloudflareForDev();
+}
 
 /**
  * Origin iframe Google Maps (Skill 18) untuk CSP frame-src. Dibaca saat build,

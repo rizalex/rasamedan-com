@@ -20,7 +20,7 @@ Referensi lengkap kebutuhan produk ada di `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.m
 | Frontend/Framework | Next.js (App Router) |
 | Styling | CSS murni / CSS Modules (hindari framework berat kecuali diminta) |
 | Bahasa | HTML5, JavaScript (TypeScript boleh jika tidak menambah kompleksitas berlebih) |
-| Database | Cloudflare **D1** (SQLite via binding `DB`). Masih MySQL (`mysql2`) sampai migrasi Skill 24 selesai |
+| Database | Cloudflare **D1** (SQLite via binding `DB`, sejak Skill 24). Skema di `migrations/NNNN_*.sql`; skema MySQL lama diarsip di `docs/legacy/schema-mysql.sql` |
 | ORM/Query | Query SQL parameterized lewat helper `lib/db.ts`; tanpa ORM yang butuh binary/engine native |
 | Auth Admin | Session/JWT sederhana, HANYA untuk admin (pelanggan tidak butuh akun) |
 | i18n | next-intl atau solusi ringan setara, default `id`, opsi `en` |
@@ -70,7 +70,7 @@ Referensi lengkap kebutuhan produk ada di `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.m
   /checkout                  → CheckoutForm
   /admin                     → AdminTable, OrderStatusSelect
 /lib
-  /db.ts                     → koneksi MySQL
+  /db.ts                     → helper query D1 (query/execute/batch)
   /whatsapp.ts               → helper generate wa.me link
   /i18n.ts
 /data

@@ -7,7 +7,7 @@ import { getFeaturedProducts } from "@/lib/products";
 import { getAllCategories } from "@/lib/categories";
 import { buildMetadata, localBusinessJsonLd, SITE_TAGLINE } from "@/lib/seo";
 
-// Beranda mengambil produk pilihan dari MySQL saat request (butuh DB runtime).
+// Beranda mengambil produk pilihan dari D1 saat request (butuh DB runtime).
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = buildMetadata({

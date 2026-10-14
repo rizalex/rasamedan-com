@@ -2,6 +2,7 @@
 ## Panduan Deploy "Rasa Medan" ke cPanel (Node.js App / Passenger)
 
 > ⚠️ **Status (Skill 23, 13 Okt 2026):** aplikasi sedang dimigrasi ke Cloudflare Workers. `server.js` sudah dihapus dari `main`, jadi langkah deploy untuk cPanel di bawah **tidak lagi berlaku untuk `main`**. Hotfix cPanel darurat: checkout commit `fb4ea12`. Dokumen ini ditulis ulang untuk Cloudflare di Skill 29.
+> **Sejak Skill 24 (14 Okt 2026) `main` memakai Cloudflare D1, bukan MySQL:** `mysql2`, `db/schema.sql` (diarsip ke `docs/legacy/schema-mysql.sql`), dan skrip `db:test`/`db:schema`/`db:migrate:session`/`db:repair`/`seed:categories` sudah dihapus. Perintah MySQL di bawah hanya berlaku dari checkout `fb4ea12`. `npm run seed`/`seed:admin` di `main` kini menulis ke D1.
 > **Jangan jalankan `main` (Skill 21 ke atas) di cPanel/`next start` publik:** IP klien hanya dipercaya dari edge Cloudflare (`TRUST_CF_CONNECTING_IP`), sehingga di luar Workers semua pengunjung berbagi satu ember rate limit (satu penyerang bisa mengunci login/cek pesanan untuk semua orang).
 
 Stack: Next.js (App Router) + MySQL. Semua dependency pure-JS (mysql2) atau

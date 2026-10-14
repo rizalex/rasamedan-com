@@ -4,6 +4,7 @@
  * - NEXT_PUBLIC_SITE_URL kosong, localhost, atau bukan https — nilai ini
  *   di-inline saat build ke canonical/sitemap dan dipakai cek hostname Turnstile.
  * - TURNSTILE_SITE_KEY kosong atau masih test key di wrangler.jsonc `vars`.
+ * - database_id D1 masih placeholder (Skill 24).
  *
  * `npm run preview` tidak memakai skrip ini (preview lokal memang localhost).
  */
@@ -37,7 +38,16 @@ const jsonc = readFileSync("wrangler.jsonc", "utf8")
   .join("\n");
 let siteKey = "";
 try {
-  const vars = JSON.parse(jsonc).vars ?? {};
+  const config = JSON.parse(jsonc);
+  const vars = config.vars ?? {};
+  // Binding D1 (Skill 24): database_id placeholder hanya berlaku untuk D1 lokal.
+  const d1 = (config.d1_databases ?? []).find((d) => d.binding === "DB");
+  if (!d1) problems.push("binding D1 `DB` tidak ada di wrangler.jsonc");
+  else if (!d1.database_id || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(d1.database_id)) {
+    problems.push(
+      "database_id D1 masih placeholder — jalankan `npx wrangler d1 create rasamedan`, salin id-nya ke wrangler.jsonc, lalu `npm run db:migrate:remote`"
+    );
+  }
   siteKey = vars.TURNSTILE_SITE_KEY ?? "";
   // Flag ini meloloskan test key captcha — hanya untuk preview lokal (.dev.vars).
   if ("ALLOW_TEST_CAPTCHA" in vars) {
