@@ -1,5 +1,6 @@
 import { statement } from "@/lib/db";
 import { slugify } from "@/lib/slug";
+import { isServableUploadUrl } from "@/lib/upload-path.mjs";
 import type { ProductVariant } from "@/lib/products";
 
 /** Validasi & helper CRUD produk (server-only, dipakai route admin). */
@@ -8,7 +9,8 @@ const STOCK = ["tersedia", "terbatas", "pre-order", "tanya-stok"];
 const MAX_VARIANTS = 20;
 const MAX_PRICE_DELTA = 100_000_000;
 const MAX_VARIANT_WEIGHT = 100_000;
-const LOCAL_IMAGE = /^\/(uploads|images)\/[A-Za-z0-9._\/-]{1,200}$/;
+// Aset statis /images/... ; foto /uploads/... mengikuti aturan route R2 (Skill 27).
+const STATIC_IMAGE = /^\/images\/[A-Za-z0-9._\/-]{1,200}$/;
 
 export type ProductInput = {
   name: string;
@@ -101,7 +103,9 @@ export function validateProductInput(
   // Foto hanya boleh path lokal hasil upload/aset (bukan URL eksternal atau
   // `javascript:`): sejalan dengan CSP img-src 'self' (Skill 21.2 no. 8).
   const image = body.image ? String(body.image).trim() : "";
-  if (image && (!LOCAL_IMAGE.test(image) || image.includes(".."))) {
+  const validImage =
+    isServableUploadUrl(image) || (STATIC_IMAGE.test(image) && !image.includes(".."));
+  if (image && !validImage) {
     return { ok: false, error: "Path foto tidak valid (harus dari /uploads/ atau /images/)" };
   }
 

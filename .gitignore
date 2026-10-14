@@ -14,9 +14,9 @@
 .env*
 !.env.example
 
-# uploads foto produk (runtime, bukan bagian repo)
-/public/uploads/*
-!/public/uploads/.gitkeep
+# Foto produk ada di R2 (Skill 27). public/uploads tidak dipakai lagi dan tidak
+# boleh berisi file (deploy ditolak scripts/check-deploy-env.mjs).
+/public/uploads/
 
 # debug logs
 npm-debug.log*

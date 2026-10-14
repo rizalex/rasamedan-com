@@ -36,6 +36,36 @@ interface D1Database {
   batch<T = Record<string, unknown>>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
 }
 
+/** Subset API R2: https://developers.cloudflare.com/r2/api/workers/workers-api-reference/ */
+interface R2HTTPMetadata {
+  contentType?: string;
+  cacheControl?: string;
+}
+
+interface R2Object {
+  key: string;
+  size: number;
+  etag: string;
+  httpEtag: string;
+  uploaded: Date;
+  httpMetadata?: R2HTTPMetadata;
+}
+
+interface R2ObjectBody extends R2Object {
+  body: ReadableStream;
+}
+
+interface R2Bucket {
+  get(key: string): Promise<R2ObjectBody | null>;
+  head(key: string): Promise<R2Object | null>;
+  put(
+    key: string,
+    value: ArrayBuffer | ArrayBufferView | ReadableStream | string,
+    options?: { httpMetadata?: R2HTTPMetadata }
+  ): Promise<R2Object | null>;
+  delete(keys: string | string[]): Promise<void>;
+}
+
 interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }

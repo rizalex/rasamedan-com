@@ -69,7 +69,7 @@ lib/ db, products, product-admin, categories, orders, orders-db,
      auth, rate-limit, turnstile, client-ip, image-type, pricing, phone, whatsapp, store, seo, format, slug, i18n
 migrations/0001_init.sql · data/dummy-products.json · data/site-info.json
 locales/id.json · locales/en.json
-public/uploads/ (foto produk, writable) · public/images/ (logo, hero, ornamen)
+public/images/ (logo, hero, ornamen) · foto produk di R2 (`lib/uploads.ts`, disajikan `app/uploads/[...path]/route.ts`)
 scripts/ seed, seed-admin (lib/d1.mjs), check-deploy-env, strip-bundle-secrets
 docs/legacy/schema-mysql.sql (arsip skema MySQL lama)
 wrangler.jsonc · open-next.config.ts · cloudflare-env.d.ts · next.config.mjs · tsconfig.json
@@ -101,7 +101,9 @@ npm run dev            # http://localhost:3000 (next dev memakai D1 lokal yang s
 
 Semua perintah DB menuju D1 **lokal** secara default; target production wajib eksplisit: `npm run db:migrate:remote`, `npm run seed:admin -- --remote`. Reset DB lokal: hapus folder `.wrangler/state` lalu ulangi `db:migrate`.
 
-Cek runtime Workers lokal: `npm run preview` (http://localhost:8787, memakai D1 lokal + `.dev.vars`). Setelah mengubah `wrangler.jsonc` atau menambah secret di `.dev.vars.example`: `npm run cf:typegen`.
+Cek runtime Workers lokal: `npm run preview` (http://localhost:8787, memakai D1 + R2 lokal + `.dev.vars`).
+
+**Foto produk (R2, Skill 27):** `next dev` dan preview menyimpan upload di R2 tiruan lokal (`.wrangler/state`, tanpa akun Cloudflare) — tidak ada lagi penulisan ke `public/uploads`. Memindahkan foto lama: `npm run uploads:r2 -- --dir <folder>` (lokal) / `-- --remote` (production); `--dry-run` untuk melihat daftar dulu. Hanya file JPG/PNG/WEBP/GIF (dicek magic bytes) bernama aman yang diunggah. Jangan menaruh foto di `public/uploads/`: di `next dev` file di sana menimpa route R2 (di build Workers diabaikan lewat `public/.assetsignore`) — `--dir` wajib dan harus di luar `public/` (skrip & `npm run deploy` menolak bila tidak). Bucket R2 harus tetap privat: jangan aktifkan r2.dev/public URL. Setelah mengubah `wrangler.jsonc` atau menambah secret di `.dev.vars.example`: `npm run cf:typegen`.
 
 ## 6. Environment Variables
 
@@ -123,12 +125,12 @@ Cek runtime Workers lokal: `npm run preview` (http://localhost:8787, memakai D1 
 - **Cart**: `CartProvider` + `localStorage`, persist saat refresh, subtotal otomatis.
 - **Checkout**: validasi form per metode, hitung `total_berat = Σ berat×qty`, simpan order + items dulu, baru redirect `wa.me`.
 - **Cek pesanan**: cari by no HP (+ opsional Order ID), parameterized query, hanya data HP tsb.
-- **Admin**: route `(protected)` redirect ke `/admin/login` bila tanpa sesi; CRUD produk + upload 1 foto (`/public/uploads`, validasi tipe/ukuran); kelola pesanan + ubah status (langsung terlihat di cek-pesanan); kelola kategori; pengaturan akun (wajib password saat ini, ganti password → logout paksa).
+- **Admin**: route `(protected)` redirect ke `/admin/login` bila tanpa sesi; CRUD produk + upload 1 foto ke R2 (validasi magic bytes JPG/PNG/WEBP/GIF, maks 2 MB; URL tetap `/uploads/<nama>`, cache `immutable`); kelola pesanan + ubah status (langsung terlihat di cek-pesanan); kelola kategori; pengaturan akun (wajib password saat ini, ganti password → logout paksa).
 - **SEO**: title/desc unik per halaman, `next/image` + `alt` deskriptif, satu `h1` per halaman, cart/checkout `noindex`, robots blokir `/admin /api /checkout /keranjang /cek-pesanan`.
 
 ## 8. Deploy (ringkas)
 
-Target: Cloudflare Workers (migrasi Skill 23–30; panduan lengkap ditulis ulang di Skill 29). Urutan saat ini: `npx wrangler d1 create rasamedan` → salin `database_id` ke `wrangler.jsonc` → `npm run db:migrate:remote` → `npm run seed:admin -- --remote` → isi `TURNSTILE_SITE_KEY` + secret (`wrangler secret put`) → `npm run deploy` (diblokir `scripts/check-deploy-env.mjs` bila konfigurasi belum lengkap). `DEPLOYMENT.md` masih versi cPanel (hanya untuk hotfix dari commit `fb4ea12`).
+Target: Cloudflare Workers (migrasi Skill 23–30; panduan lengkap ditulis ulang di Skill 29). Urutan saat ini: `npx wrangler d1 create rasamedan` + `npx wrangler r2 bucket create rasa-medan-uploads` → salin `database_id` ke `wrangler.jsonc` → `npm run db:migrate:remote` → `npm run seed:admin -- --remote` → `npm run uploads:r2 -- --dir <foto cPanel> --remote` → isi `TURNSTILE_SITE_KEY` + secret (`wrangler secret put`) → `npm run deploy` (diblokir `scripts/check-deploy-env.mjs` bila konfigurasi belum lengkap). `DEPLOYMENT.md` masih versi cPanel (hanya untuk hotfix dari commit `fb4ea12`).
 
 ## 9. Peta Dokumen
 

@@ -25,7 +25,7 @@ Referensi lengkap kebutuhan produk ada di `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.m
 | Auth Admin | Session/JWT sederhana, HANYA untuk admin (pelanggan tidak butuh akun) |
 | i18n | next-intl atau solusi ringan setara, default `id`, opsi `en` |
 | Deployment target | **Cloudflare Workers** via `@opennextjs/cloudflare` + flag `nodejs_compat` (paket Free). Production lama tetap berjalan di cPanel sampai cutover Skill 30, tetapi **tidak bisa di-deploy ulang dari `main`** sejak Skill 23 (`server.js` dihapus, tanpa cabang legacy — keputusan pemilik). Hotfix cPanel darurat: dari commit `fb4ea12` |
-| Upload foto | Cloudflare **R2** (binding `UPLOADS`), mulai Skill 27. Sebelumnya disk lokal `public/uploads` |
+| Upload foto | Cloudflare **R2** (binding `UPLOADS`, sejak Skill 27), disajikan route `app/uploads/[...path]` di URL `/uploads/<nama>`. Lokal memakai R2 tiruan (miniflare), bukan disk |
 
 ### Batasan Deployment Cloudflare Workers (PENTING)
 - **Tanpa filesystem persisten:** jangan memakai `node:fs` untuk data runtime; data statis di-`import`, file upload ke R2.
@@ -76,7 +76,7 @@ Referensi lengkap kebutuhan produk ada di `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.m
 /data
   /dummy-products.json       → data dummy untuk development
 /public
-  /uploads
+  /uploads                   → kosong (foto produk di R2, URL /uploads/* dilayani route)
   /images (aset statis: logo, ornamen Melayu, dll)
 ```
 

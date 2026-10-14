@@ -51,13 +51,14 @@
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
 
-  // Binding berikut sengaja dikomentari: `wrangler deploy` gagal bila resource
-  // belum dibuat. Aktifkan di skill terkait setelah pemilik membuatnya.
-  //
-  // Skill 27 — setelah bucket R2 dibuat:
-  // "r2_buckets": [
-  //   { "binding": "UPLOADS", "bucket_name": "rasa-medan-uploads" }
-  // ]
+  // Foto produk di R2 (Skill 27), disajikan lewat route /uploads/[...path].
+  // Lokal (`next dev`, preview) memakai R2 tiruan di .wrangler/state — tanpa
+  // akun Cloudflare. Sebelum `npm run deploy`, pemilik WAJIB membuat bucket:
+  //   npx wrangler r2 bucket create rasa-medan-uploads
+  // (tanpa bucket itu `wrangler deploy` gagal dengan pesan bucket tidak ada).
+  "r2_buckets": [
+    { "binding": "UPLOADS", "bucket_name": "rasa-medan-uploads" }
+  ]
 }

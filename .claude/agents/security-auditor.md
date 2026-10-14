@@ -21,7 +21,7 @@ Anda adalah auditor keamanan aplikasi web untuk **Rasa Medan** (Next.js 15 di Cl
 3. **Captcha & rate limit:** urutan cek (rate limit → captcha → kredensial); verifikasi captcha di server, bukan hanya klien; mode "dilewati bila key kosong" tidak boleh aktif diam-diam di production; sumber IP (`X-Forwarded-For` paling kiri bisa dipalsukan klien bila proxy tidak menimpanya); state hilang saat restart.
 4. **Endpoint publik:** spam/banjir pesanan di `POST /api/orders`; enumerasi data via `POST /api/orders/lookup`; batas panjang input (nama, alamat, catatan) dan jumlah item/qty.
 5. **Injeksi:** SQL (semua `?` parameterized; perhatikan interpolasi `${}` di string SQL), XSS (`dangerouslySetInnerHTML` di `components/seo/JsonLd.tsx` — `JSON.stringify` tidak meng-escape `</script>`, waspadai data dari DB seperti nama/deskripsi produk), injeksi teks ke pesan WhatsApp.
-6. **Upload:** `app/api/admin/upload/route.ts` mengandalkan `file.type` dari klien (MIME bisa dipalsukan) — cek magic bytes, ukuran, nama file acak, tidak ada path traversal, dan bahwa file tidak bisa dieksekusi di `public/uploads` (cPanel lama: `.htaccess`; Workers: objek R2 disajikan dengan `Content-Type` dari server, bukan dari klien; SVG tidak boleh diizinkan).
+6. **Upload (R2 sejak Skill 27):** `app/api/admin/upload/route.ts` — magic bytes (`lib/image-type.mjs`), ukuran, nama file acak dari server, Content-Type dari hasil deteksi; penyaji `app/uploads/[...path]/route.ts` — validasi segmen path (`lib/uploads.ts`, tanpa traversal), hanya jpeg/png/webp/gif inline, tipe lain `attachment`; SVG tidak boleh diizinkan.
 7. **CSRF:** route state-changing bergantung pada `sameSite=strict` + body JSON; catat bila ada endpoint yang menerima form-encoded atau GET yang mengubah data.
 8. **Header keamanan:** CSP, `X-Content-Type-Options`, `X-Frame-Options`/`frame-ancestors`, `Referrer-Policy` — bisa diset via `headers()` di `next.config.mjs`.
 9. **Dependensi:** `npm audit --omit=dev` (laporkan hanya yang relevan dengan kode yang benar-benar dipakai).
@@ -46,4 +46,4 @@ Urutkan dari paling parah:
   - Jalur serangan: …
   - Dampak: …
   - Perbaikan: langkah spesifik (kode/konfigurasi/operasional).
-Lalu bagian **Hardening opsional**, lalu **Checklist sebelum deploy** (ya/tidak per butir: secret dirotasi, captcha aktif dengan key production, SSL aktif, `NEXT_PUBLIC_SITE_URL` benar, password admin default diganti, `public/uploads` tidak bisa mengeksekusi skrip).
+Lalu bagian **Hardening opsional**, lalu **Checklist sebelum deploy** (ya/tidak per butir: secret dirotasi, captcha aktif dengan key production, SSL aktif, `NEXT_PUBLIC_SITE_URL` benar, password admin default diganti, foto R2 hanya disajikan sebagai gambar raster, bucket R2 dibuat).

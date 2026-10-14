@@ -5,10 +5,11 @@
  *   di-inline saat build ke canonical/sitemap dan dipakai cek hostname Turnstile.
  * - TURNSTILE_SITE_KEY kosong atau masih test key di wrangler.jsonc `vars`.
  * - database_id D1 masih placeholder (Skill 24).
+ * - public/uploads berisi file (Skill 27: akan menimpa route R2 sebagai aset statis).
  *
  * `npm run preview` tidak memakai skrip ini (preview lokal memang localhost).
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 // Next memuat .env saat build; skrip ini membaca nilai yang sama.
 const { loadEnvConfig } = await import("@next/env").then((m) => m.default ?? m);
@@ -58,6 +59,13 @@ try {
 }
 if (!siteKey) problems.push("TURNSTILE_SITE_KEY di wrangler.jsonc `vars` masih kosong");
 else if (/^[123]x0{10,}/.test(siteKey)) problems.push("TURNSTILE_SITE_KEY masih test key");
+
+// Skill 27: isi public/ ikut ter-deploy sebagai aset statis yang dilayani
+// SEBELUM Worker — file di public/uploads akan menimpa route R2 /uploads dan
+// disajikan tanpa allowlist tipe (risiko XSS bila ada .html/.svg).
+if (existsSync("public/uploads") && readdirSync("public/uploads").length > 0) {
+  problems.push("public/uploads berisi file — foto produk harus di R2 (npm run uploads:r2 -- --dir <folder di luar public>), lalu kosongkan/hapus folder itu");
+}
 
 if (problems.length > 0) {
   console.error("❌ Deploy dibatalkan — konfigurasi production belum benar:");

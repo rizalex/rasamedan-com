@@ -44,7 +44,8 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 24 | Migrasi database MySQL → D1 | ✅ Kode selesai (14 Okt 2026): `migrations/0001_init.sql`, `lib/db.ts` D1, semua route via `batch()`/`queryIn`, `mysql2` dihapus; E2E 54 skenario (termasuk checkout 50 baris) lolos di `next dev` + preview workerd (D1 lokal). ⏳ Pemilik: `wrangler d1 create rasamedan` + isi `database_id` (deploy diblokir sampai diisi) |
 | 26 | Rewrite auth untuk Workers | ✅ Kode selesai (14 Okt 2026): PBKDF2-SHA256 Web Crypto (30.000 iterasi, terukur ±5 ms) + HMAC `crypto.subtle`, auth async penuh, `seed:admin` PBKDF2; hash scrypt lama ditolak (reset admin). Rincian 26a |
 | 28 | Turnstile & rate limit di D1 | ✅ Kode selesai (14 Okt 2026): `lib/rate-limit.ts` di tabel D1 `login_failures` (atomik, tahan restart, lintas isolate) untuk login, cek pesanan, checkout, Pengaturan. Turnstile sudah sejak Skill 21. Rincian 28a |
-| 25, 27, 29, 30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
+| 27 | Upload foto: disk → R2 | ✅ Kode selesai (14 Okt 2026): upload ke R2 `UPLOADS`, route GET `/uploads/[...path]`, skrip `uploads:r2` untuk foto lama; teruji di R2 lokal. ⏳ Pemilik: `wrangler r2 bucket create rasa-medan-uploads`. Rincian 27a |
+| 25, 29, 30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
 
 ---
 
@@ -602,7 +603,7 @@ transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-
 | 9 | ✅ `_tmp_dbtest.mjs` dihapus (Skill 20); `.claude/settings.local.json` di-ignore & keluar dari git |
 | 10 | ✅ Kode: `seed:admin` wajib `ADMIN_PASSWORD` ≥ 12. ⏳ **Pemilik:** ganti password akun lama bila masih default |
 
-Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal antar-isolate Workers → tabel D1 (Skill 28, selesai); hashing scrypt → PBKDF2 (Skill 26, selesai); upload ke R2 (Skill 27).
+Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal antar-isolate Workers → tabel D1 (Skill 28, selesai); hashing scrypt → PBKDF2 (Skill 26, selesai); upload ke R2 (Skill 27, selesai).
 
 ### 21.3 Checklist pre-deploy Cloudflare Workers (isi setiap kali deploy)
 - [ ] Audit penuh `security-auditor`: tidak ada temuan Kritis/Tinggi yang masih terbuka
@@ -860,6 +861,18 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ---
 
+### 27a — Catatan pelaksanaan (14 Okt 2026)
+
+- **Binding** `UPLOADS` → bucket `rasa-medan-uploads` aktif di `wrangler.jsonc`. Lokal (`next dev`, preview, skrip) memakai R2 tiruan miniflare di `.wrangler/state` — **keputusan langkah 5: dev lokal juga R2 (lokal)**, tidak ada jalur tulis disk, sehingga perilaku dev = production. Deploy gagal dengan pesan jelas dari wrangler bila bucket belum dibuat.
+- **Upload** (`app/api/admin/upload/route.ts`): `Content-Length` > 2 MB + overhead ditolak sebelum body dibaca; ukuran dicek ulang dari isi; magic bytes (`lib/image-type.mjs`, kini .mjs agar dipakai juga oleh skrip Node); nama `<epoch>-<12 hex>.<ext>` dari `crypto.getRandomValues` (tanpa `node:crypto`); `httpMetadata.contentType` dari hasil deteksi server. Kunci R2 `uploads/<nama>`, respons `url: /uploads/<nama>` — format kolom `products.image` tidak berubah.
+- **Penyaji** `app/uploads/[...path]/route.ts`: segmen path divalidasi (`lib/uploads.ts`: `[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}`, maks 5 segmen → tanpa traversal/dotfile); hanya jpeg/png/webp/gif disajikan inline, objek bertipe lain (mis. diunggah manual) `application/octet-stream` + `attachment`; `Cache-Control: public, max-age=31536000, immutable`, `ETag` + 304, `nosniff`.
+- **Migrasi foto lama** (langkah 4): `npm run uploads:r2 -- --dir <folder> [--remote] [--dry-run]` — hanya gambar valid bernama aman (aturan segmen sama dengan route); SVG/PHP menyamar/nama berspasi dilewati dengan peringatan. Untuk cutover (Skill 30): unduh `public/uploads` dari cPanel lalu jalankan dengan `--remote`.
+- **Dari audit:** `public/uploads/` dihapus dari repo (diabaikan git) dan `npm run deploy` ditolak bila folder itu berisi file; `public/.assetsignore` (`uploads/*`) ikut tersalin ke direktori aset sehingga file nyasar tidak pernah tersaji sebagai aset statis yang mendahului route R2 (teruji: `stray.html` → 404); `uploads:r2` mewajibkan `--dir` di luar `public/` dan melewati symlink; upload menolak `Origin` lintas situs (403) dan request tanpa `Content-Length` (411 — di wrangler dev/edge body sudah ber-panjang, teruji di `next dev`); `If-None-Match` mendukung daftar & ETag lemah; validasi `image` produk memakai aturan path yang sama dengan route (`lib/upload-path.mjs`, dipakai juga skrip). Bucket R2 wajib tetap privat (r2.dev/public URL nonaktif).
+- **Uji asap setelah deploy pertama (Skill 29/30):** unggah foto dari dashboard production (pastikan tidak ada 411 palsu lewat edge asli) dan cek bucket di dashboard: r2.dev/public URL **Disabled**.
+- **Hardening opsional (belum):** Cache API (`caches.default`) di route penyaji untuk menghemat operasi R2 Class B; rate limit jumlah upload per sesi.
+- **Belum dikerjakan (sengaja):** objek R2 lama tidak dihapus saat foto produk diganti/produk dihapus (file yatim kecil, aman; bisa dirapikan nanti). Langkah 6 opsional (custom domain `cdn.rasamedan.com` agar gambar tidak memakan kuota request Worker) — pertimbangkan bila kuota 100 rb request/hari mendekati batas.
+- **Teruji** (`next dev` + preview workerd): upload PNG → URL → GET 200 isi identik, cache/ETag/304, tanpa sesi 401, PHP-menyamar-PNG/SVG/>2 MB ditolak, foto hasil skrip migrasi (termasuk subfolder) tersaji, objek `text/html` tersaji sebagai attachment, 6 path jahat → 404/400, produk dengan foto R2 tampil di halaman detail; E2E 54 skenario tetap lolos.
+
 ## Skill 28 — Turnstile & Rate Limit di D1
 
 > **Sudah dikerjakan di Skill 21:** langkah 1, 2, dan 4 (Turnstile di login, cek pesanan, checkout; batas input/item; rate limit checkout). Sisa skill ini: langkah 3 — rate limit pindah dari memori ke tabel D1 `login_failures`. Kunci yang wajib ikut dipindah: `login:*`, `checkorder:*`, `order:*`, `ordercaptcha:*`, dan `account:*` (tebakan password saat ini di Pengaturan, Skill 26; per akun + IP).
@@ -908,7 +921,7 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 4. Aktifkan **Workers Builds** (integrasi GitHub: push ke `main` → build + deploy otomatis), atau bila tidak tersedia, dokumentasikan deploy manual `npm run deploy`.
 5. Tulis ulang `DEPLOYMENT.md` untuk Cloudflare; pindahkan versi cPanel ke `docs/legacy/DEPLOYMENT-cpanel.md`.
 6. Update `README.md` §2 (tech stack) dan §8 (deploy) sesuai kondisi baru.
-7. Sesuaikan checklist Skill 21.3 untuk Cloudflare (SSL otomatis, uploads di R2, tanpa `.htaccess`).
+7. Sesuaikan checklist Skill 21.3 untuk Cloudflare (SSL otomatis, uploads di R2 — bucket `rasa-medan-uploads` sudah dibuat, tanpa `.htaccess`).
 8. **Pemilik:** pasang 1 aturan WAF Rate Limiting (paket Free) untuk `/api/admin/auth`, `/api/orders`, `/api/orders/lookup`, dan notifikasi penggunaan Workers/D1 — melindungi kuota harian D1 dari banjir request multi-IP (catatan 28a).
 
 **Acceptance Criteria:**
