@@ -43,3 +43,10 @@ Thumbs.db
 
 # Ekspor data production (Skill 25) — berisi data pribadi pelanggan
 /db-export/
+
+# File SQL berisi data (backup D1, ekspor) tidak boleh ter-commit. Pengecualian:
+# skema & seed yang memang bagian repo.
+*.sql
+!/migrations/*.sql
+!/db/seed/*.sql
+!/docs/legacy/*.sql

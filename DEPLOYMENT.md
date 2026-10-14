@@ -1,120 +1,201 @@
 # DEPLOYMENT.md
-## Panduan Deploy "Rasa Medan" ke cPanel (Node.js App / Passenger)
+## Panduan Deploy "Rasa Medan" ke Cloudflare Workers
 
-> ⚠️ **Status (Skill 23, 13 Okt 2026):** aplikasi sedang dimigrasi ke Cloudflare Workers. `server.js` sudah dihapus dari `main`, jadi langkah deploy untuk cPanel di bawah **tidak lagi berlaku untuk `main`**. Hotfix cPanel darurat: checkout commit `fb4ea12`. Dokumen ini ditulis ulang untuk Cloudflare di Skill 29.
-> **Sejak Skill 24 (14 Okt 2026) `main` memakai Cloudflare D1, bukan MySQL:** `mysql2`, `db/schema.sql` (diarsip ke `docs/legacy/schema-mysql.sql`), dan skrip `db:test`/`db:schema`/`db:migrate:session`/`db:repair`/`seed:categories` sudah dihapus. Perintah MySQL di bawah hanya berlaku dari checkout `fb4ea12`. `npm run seed`/`seed:admin` di `main` kini menulis ke D1.
-> **Jangan jalankan `main` (Skill 21 ke atas) di cPanel/`next start` publik:** IP klien hanya dipercaya dari edge Cloudflare (`TRUST_CF_CONNECTING_IP`), sehingga di luar Workers semua pengunjung berbagi satu ember rate limit (satu penyerang bisa mengunci login/cek pesanan untuk semua orang).
+Aplikasi berjalan di **Cloudflare Workers** (paket Free) lewat `@opennextjs/cloudflare`:
+database **D1**, foto produk **R2**, captcha **Turnstile**. Panduan cPanel lama
+diarsip di [`docs/legacy/DEPLOYMENT-cpanel.md`](docs/legacy/DEPLOYMENT-cpanel.md)
+(hanya untuk hotfix darurat dari commit `fb4ea12`).
 
-Stack: Next.js (App Router) + MySQL. Semua dependency pure-JS (mysql2) atau
-bawaan Node (crypto) — **tidak ada native binary yang perlu di-compile** di
-shared hosting. Optimasi gambar Next dimatikan (tanpa `sharp`).
-
----
-
-## 1. Prasyarat di cPanel
-- Menu **"Setup Node.js App"** tersedia (Phusion Passenger). Jika tidak ada,
-  minta provider mengaktifkannya.
-- Node.js **18+** (project diuji di Node 20/22/25). Next 15 butuh Node ≥ 18.18.
-- Akses **MySQL Databases** dan **phpMyAdmin**.
+> Cutover domain `rasamedan.com` dari cPanel (impor data final, DNS, pensiun
+> cPanel) adalah **Skill 30** — dokumen ini menyiapkan deploy yang bisa diuji di
+> `*.workers.dev` lebih dulu.
 
 ---
 
-## 2. Setup Database MySQL
-1. Buat database baru via **MySQL Databases** (mis. `namauser_rasamedan`).
-2. Buat user MySQL, assign ke database dengan **ALL PRIVILEGES**.
-3. Import schema tabel via **phpMyAdmin → Import**, pilih file **`db/schema.sql`**
-   dari project ini. Ini membuat 6 tabel: `categories` (sudah berisi
-   Kue/Kering/Sirup), `products`, `product_variants`, `orders`, `order_items`,
-   `admin_users`.
-   - Alternatif via SSH: `npm run db:schema` (butuh `.env` terisi).
-   - **DB lama (sebelum 13 Okt 2026):** jalankan `npm run db:migrate:session` —
-     tanpa kolom `admin_users.session_version` login admin ditolak (fail-closed).
-     Semua admin perlu login ulang sekali setelah update.
-4. (Opsional) Isi data awal produk: `npm run seed` — memasukkan 9 produk contoh
-   dari `data/dummy-products.json`. Lewati jika ingin mulai dari kosong.
-   Seed menolak jalan bila tabel produk sudah berisi (cegah katalog asli terhapus);
-   untuk menimpa dengan data dummy: `npm run seed -- --force`.
-5. **Buat akun admin** (wajib, agar bisa login dashboard):
-   `ADMIN_USERNAME=admin ADMIN_PASSWORD='<password-kuat-milik-sendiri>' npm run seed:admin`
-   (jangan salin contoh apa adanya; awali perintah dengan spasi agar password
-   tidak tersimpan di riwayat shell bila `HISTCONTROL=ignorespace`)
-   (`ADMIN_PASSWORD` wajib, minimal 12 karakter — tidak ada password default).
-   Akun yang sudah ada tidak ditimpa; reset password sengaja:
-   `ADMIN_PASSWORD=... npm run seed:admin -- --reset`.
-6. Catat `DB_HOST` (biasanya `localhost`), `DB_USER`, `DB_PASS`, `DB_NAME`.
+## 0. Peta konfigurasi (di mana setiap nilai tinggal)
+
+| Jenis | Contoh | Lokasi | Kapan dibaca |
+|---|---|---|---|
+| Publik, di-inline ke JS | `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_WA_NUMBER`, info toko | `.env` (deploy dari komputer) **atau** Build variables Workers Builds | **saat build** — ubah nilai = build & deploy ulang |
+| Non-rahasia runtime | `TURNSTILE_SITE_KEY`, `TRUST_CF_CONNECTING_IP` | `vars` di `wrangler.jsonc` (di-commit) | saat request |
+| Rahasia runtime | `ADMIN_SESSION_SECRET`, `TURNSTILE_SECRET_KEY` | `npx wrangler secret put <NAMA>` | saat request |
+| Binding | D1 `DB`, R2 `UPLOADS` | `wrangler.jsonc` | saat request |
+| Lokal saja | rahasia untuk `npm run preview` | `.dev.vars` (tidak di-commit) | preview lokal |
+
+Catatan:
+- `NEXT_PUBLIC_*` **tidak** ditaruh di `vars` wrangler: Next meng-inline-nya saat
+  build, sehingga nilai runtime tidak berpengaruh (menyimpang dari teks Skill 29
+  langkah 1 — dicatat di SKILLS 29a).
+- `npm run cf:build` menyaring `.env` dari bundle: hanya `NEXT_PUBLIC_*`,
+  `GOOGLE_SITE_VERIFICATION`, `NODE_ENV` yang ikut (`scripts/strip-bundle-secrets.mjs`).
+  Rahasia di `.env` lokal tidak pernah ter-upload.
+- Jangan pernah set `vars` lewat dashboard: `wrangler deploy` menimpanya dengan isi `wrangler.jsonc`.
 
 ---
 
-## 3. Environment Variables
-Salin `.env.example` menjadi `.env` dan isi (atau masukkan langsung ke panel
-**Environment Variables** cPanel — JANGAN commit/upload `.env` berisi kredensial):
+## 1. Prasyarat (sekali)
 
-| Variable | Keterangan |
-|---|---|
-| `DB_HOST` `DB_PORT` `DB_USER` `DB_PASS` `DB_NAME` | Kredensial MySQL dari langkah 2 |
-| `NEXT_PUBLIC_WA_NUMBER` | Nomor WA UTAMA (khusus pemesanan), format internasional tanpa `+` (mis. `6281234567890`) |
-| `NEXT_PUBLIC_WA_NUMBER_ALT` | Nomor WA ALTERNATIF untuk layanan pelanggan/pertanyaan umum (opsional; kosongkan bila tak dipakai) |
-| `ADMIN_SESSION_SECRET` | String acak panjang (mis. hasil `openssl rand -hex 32`). **Wajib dirotasi** — nilai lama pernah ter-commit (Skill 21.2 no. 1). Ganti di SEMUA lokasi: (1) panel Node.js App cPanel yang masih live lalu restart, (2) `npx wrangler secret put ADMIN_SESSION_SECRET` untuk Workers, (3) `.env` lokal. Nilai yang bocor ditolak aplikasi versi baru, tetapi kode lama di cPanel masih menerimanya. |
-| `TURNSTILE_SITE_KEY` `TURNSTILE_SECRET_KEY` | Kunci Cloudflare Turnstile (dash.cloudflare.com → Turnstile → Add widget, mode *Managed*; hostname = domain production, plus `*.workers.dev` bila dipakai untuk staging). **Wajib di production** — tanpa secret, login/cek pesanan/checkout ditolak. Test key `1x…` ditolak di production (kecuali `ALLOW_TEST_CAPTCHA=1` di `.dev.vars` untuk preview lokal — jangan pernah di Workers). Key asli butuh `NEXT_PUBLIC_SITE_URL` https yang benar saat build. |
-| `NODE_ENV` | `production` |
+1. Node.js **≥ 20.6**, lalu `npm install`.
+2. Akun Cloudflare; login CLI: `npx wrangler login`.
+3. (Untuk Skill 30) domain `rasamedan.com` sudah memakai nameserver Cloudflare.
 
-> **Keamanan (Skill 15 & 21):** Turnstile wajib di production untuk login admin,
-> cek pesanan, dan checkout (fail-closed). Server juga memastikan hostname token
-> sama dengan `NEXT_PUBLIC_SITE_URL` — build staging workers.dev harus memakai URL
-> workers.dev itu. Login juga dibatasi rate-limit (maks 5 gagal / 15 menit per IP → terkunci sementara), dan
-> cookie sesi memakai `httpOnly` + `sameSite=strict` + `secure` (butuh HTTPS).
-
----
-
-## 4. Build Aplikasi
-Disarankan build **lokal** lalu upload folder `.next` (lebih ringan untuk shared
-hosting), atau build di server bila ada akses SSH:
+## 2. Buat resource Cloudflare (sekali)
 
 ```bash
-npm install
-npm run build
+npx wrangler d1 create rasamedan
+```
+Salin `database_id` dari output ke `wrangler.jsonc` → `d1_databases[0].database_id`
+(menggantikan placeholder `00000000-…`; `npm run deploy` menolak jalan sebelum diganti).
+
+```bash
+npx wrangler r2 bucket create rasa-medan-uploads
+```
+Bucket harus **privat**: di dashboard R2 → bucket → Settings, pastikan *Public
+Development URL (r2.dev)* **Disabled** dan tidak ada custom domain. Foto disajikan
+lewat route aplikasi `/uploads/...`.
+
+**Turnstile:** dashboard → Turnstile → Add widget, mode *Managed*, hostname = domain
+production (+ `<nama>.workers.dev` untuk staging). Isi **site key** ke
+`wrangler.jsonc` → `vars.TURNSTILE_SITE_KEY` dan commit.
+
+## 3. Rahasia (sekali, dan setiap rotasi)
+
+> ⚠️ **PALING MENDESAK — situs cPanel yang masih live:** nilai `ADMIN_SESSION_SECRET`
+> lama pernah ter-commit (tetap ada di riwayat git). Kode lama di cPanel **masih
+> menerimanya** — siapa pun yang pernah/akan bisa membaca riwayat repo bisa memalsukan sesi admin
+> cPanel. Ganti sekarang di panel *Setup Node.js App* cPanel (Environment variables →
+> `ADMIN_SESSION_SECRET`) lalu **Restart**, dan ganti juga password admin cPanel.
+> Nilai untuk cPanel (harus BERBEDA dari nilai Workers di bawah) — cetak sekali,
+> tempel ke panel, lalu bersihkan layar (`cls`/`clear`) dan clipboard:
+> `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+> Berlaku sampai cPanel dipensiunkan (Skill 30).
+
+Buat secret sesi baru untuk Workers — **wajib nilai baru**, dialirkan langsung tanpa
+ditampilkan di layar atau clipboard:
+```bash
+node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))" | npx wrangler secret put ADMIN_SESSION_SECRET
+npx wrangler secret put TURNSTILE_SECRET_KEY
+```
+(untuk Turnstile, tempel secret dari dashboard saat diminta; jangan menaruh rahasia di
+file, argumen perintah, atau Build variables). Di Windows PowerShell 5.1 pipe bisa
+menambah baris baru di akhir nilai — jalankan baris pertama dari Git Bash, atau pakai
+prompt interaktif `npx wrangler secret put ADMIN_SESSION_SECRET` lalu tempel nilai
+dari `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+(kosongkan clipboard sesudahnya).
+Rotasi secret sesi = semua admin logout — aman dilakukan kapan saja.
+Bila Worker `rasa-medan` belum pernah di-deploy, `secret put` menawarkan membuat Worker
+kosong — jawab **Y** (atau jalankan langkah ini setelah deploy pertama; sebelum secret
+terpasang, login admin production menolak dengan error 500 — gagal tertutup).
+
+## 4. Nilai build (`.env`)
+
+Salin `.env.example` → `.env`, isi minimal:
+- `NEXT_PUBLIC_SITE_URL` = URL https tempat situs akan diakses, tanpa trailing slash.
+  Staging: `https://rasa-medan.<subdomain>.workers.dev`; production: `https://rasamedan.com`.
+  Nilai ini juga dipakai cek hostname Turnstile — **harus cocok dengan URL deploy**.
+  Pindah dari staging ke domain asli (cutover) = ganti nilai ini lalu `npm run deploy`
+  ulang; tanpa build ulang, canonical/sitemap menunjuk workers.dev dan captcha menolak
+  token dari domain asli.
+- `NEXT_PUBLIC_WA_NUMBER` (nomor WA asli pemilik, format `628…`), info toko & sosial.
+- `GOOGLE_SITE_VERIFICATION` (opsional).
+
+`ADMIN_SESSION_SECRET`/`TURNSTILE_*` di `.env` hanya untuk `next dev`, tidak dipakai Worker.
+
+## 5. Database & admin
+
+```bash
+npm run db:migrate:remote
 ```
 
----
+Buat admin production (password ≥ 12 karakter acak). **PowerShell (Windows):**
+```powershell
+$p = Read-Host "Password admin baru" -AsSecureString
+$env:ADMIN_USERNAME = "admin"
+$env:ADMIN_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($p))
+npm run seed:admin -- --remote
+Remove-Item Env:ADMIN_PASSWORD, Env:ADMIN_USERNAME; Remove-Variable p
+```
+(`-AsSecureString`: password tidak tampil di layar dan tidak tersimpan di riwayat PowerShell.)
+**bash / Git Bash:**
+```bash
+read -rs -p "Password admin baru: " ADMIN_PASSWORD && export ADMIN_PASSWORD ADMIN_USERNAME=admin
+npm run seed:admin -- --remote; unset ADMIN_PASSWORD
+```
+Data produk & pesanan dari cPanel diimpor saat cutover (Skill 25/30:
+`npm run db:export` → `npm run db:import -- --file … --remote`).
+Foto lama: `npm run uploads:r2 -- --dir <folder di luar public/> --remote`.
 
-## 5. Upload ke Server
-- Upload seluruh project **kecuali** `node_modules` (dan `.env` asli).
-- Jika build dilakukan lokal, **ikutkan folder `.next`**.
-- Pastikan folder **`public/uploads`** ada dan **writable** (foto produk admin
-  disimpan di sini). Set permission `755` (atau `775`) bila perlu.
+## 6. Deploy
 
----
+```bash
+npm run deploy
+```
+Urutan otomatis: `scripts/check-deploy-env.mjs` (menolak bila `NEXT_PUBLIC_SITE_URL`
+bukan https/masih localhost, `TURNSTILE_SITE_KEY` kosong/test key, `database_id`
+placeholder, `public/uploads` berisi file, `ALLOW_TEST_CAPTCHA` atau nama berbau
+rahasia/`DB_*` di `vars`, `TRUST_CF_CONNECTING_IP` ≠ "1", atau `NEXT_PUBLIC_*` bernama
+rahasia; memberi peringatan bila nomor WA masih dummy) → `opennextjs-cloudflare build` →
+penyaring rahasia bundle → `wrangler deploy`.
 
-## 6. Setup Node.js App di cPanel
-1. **Setup Node.js App → Create Application**.
-2. **Application root**: folder project.
-3. **Application startup file**: **`server.js`** (custom server Next yang listen
-   di `process.env.PORT` dari Passenger).
-4. **Node.js version**: 18+.
-5. Isi semua **Environment Variables** (lihat bagian 3).
-6. Klik **Run NPM Install**.
-7. Bila `.next` belum diupload, jalankan build via terminal cPanel: `npm run build`.
-8. Klik **Restart**.
+Cek sebelum deploy (opsional): `npm run cf:dryrun` (ukuran bundle; batas Free 3 MiB gzip, saat ini ±1,1 MiB).
 
-> Menjalankan manual (mis. saat tes SSH): `npm run build && npm start`
-> (`npm start` = `next start`). Passenger sendiri memakai `server.js`.
+## 7. Uji asap setelah deploy (wajib, di URL deploy)
 
----
+- [ ] Beranda, katalog + filter, detail produk, toggle bahasa, keranjang
+- [ ] Checkout (widget Turnstile muncul) → Order ID → tautan WhatsApp benar; coba juga keranjang besar (±50 baris)
+- [ ] Cek pesanan dengan nomor HP (+ Order ID)
+- [ ] Login admin, ubah status pesanan, pencarian pesanan, CRUD produk + **upload foto** (tidak ada error 411), kategori
+- [ ] Ganti password admin di Pengaturan (± 10 ms CPU — bila muncul error "Exceeded CPU", lihat SKILLS 26a)
+- [ ] `curl -I <url>/` menampilkan CSP, nosniff, X-Frame-Options, Referrer-Policy; console browser tanpa pelanggaran CSP
+- [ ] `npx wrangler tail` bersih dari error selama uji
 
-## 7. Domain & SSL
-- Arahkan domain/subdomain ke aplikasi via panel Setup Node.js App.
-- Aktifkan SSL (Let's Encrypt) di menu **SSL/TLS Status**. Karena cookie sesi
-  admin memakai flag `secure` di production, HTTPS wajib agar login admin jalan.
+## 8. Proteksi kuota (sekali, dashboard)
 
----
+- **WAF → Rate limiting rules** (1 aturan gratis): path `/api/admin/auth`, `/api/orders`,
+  `/api/orders/lookup`, mis. 20 request / 10 detik per IP → Block. Menahan banjir request
+  sebelum menyentuh Worker/D1 (rate limit aplikasi tetap aktif di D1).
+- **Notifications**: aktifkan peringatan penggunaan Workers & D1 mendekati batas Free
+  (100 rb request/hari; D1 5 jt baca & 100 rb tulis/hari).
 
-## 8. Checklist Sebelum Go-Live
-- [ ] `NEXT_PUBLIC_WA_NUMBER` sudah nomor WA asli pemilik (bukan `62812...0000`)
-- [ ] `ADMIN_SESSION_SECRET` diganti string acak kuat
-- [ ] Password admin diganti (`seed:admin` dengan `ADMIN_PASSWORD` kuat)
-- [ ] SSL/HTTPS aktif (wajib untuk cookie sesi admin `secure`)
-- [ ] `public/uploads` writable & foto produk tampil benar
-- [ ] Test alur checkout penuh sampai membuka WhatsApp dengan pesan benar
-- [ ] Test cek status pesanan pakai nomor HP
-- [ ] Test login admin `/admin/login` + ubah status pesanan
-- [ ] Backup database berkala (cPanel Cron/Backup)
+## 9. Deploy otomatis dari GitHub (opsional — Workers Builds)
+
+Dashboard → Workers & Pages → `rasa-medan` → Settings → Builds → Connect repository:
+- Branch production: `main`
+- Build command: `npm ci && node scripts/check-deploy-env.mjs && npm run cf:build`
+- Deploy command: `npx wrangler deploy`
+- **Build variables**: HANYA `NEXT_PUBLIC_*` (+ `GOOGLE_SITE_VERIFICATION`) dengan nilai
+  production — CI tidak punya file `.env`. **Jangan** taruh rahasia di sini (terlihat di
+  pengaturan & log build).
+- **Matikan build cabang non-produksi** (Settings → Builds → *non-production branch
+  builds*): versi preview memakai D1/R2 dan secret production yang sama, jadi kode
+  cabang mana pun bisa membaca/menulis data pelanggan asli lewat URL preview.
+- Rahasia runtime tetap lewat `wrangler secret put` (tidak perlu diulang tiap build).
+- Guard di build command membaca `TURNSTILE_SITE_KEY` dan `database_id` dari
+  `wrangler.jsonc` di repo — keduanya harus sudah di-commit sebelum push pertama, atau
+  build CI gagal (sengaja).
+- Cek di dashboard saat menyiapkan: nama Worker harus `rasa-medan` (sama dengan
+  `name` di `wrangler.jsonc`); bila kolom build command tidak menerima `&&`, buat skrip
+  npm `ci:build` berisi rangkaian yang sama.
+
+Sampai Workers Builds diaktifkan, `npm run deploy` dari komputer pemilik adalah prosedur resmi.
+
+## 10. Operasional
+
+- **Log langsung:** `npx wrangler tail` — menampilkan IP/URL/header pengunjung (data
+  pribadi): jangan disimpan ke file atau dibagikan saat minta bantuan.
+- **Rollback kode:** `npx wrangler deployments list` lalu `npx wrangler rollback <version-id>`.
+  Tidak mengembalikan data D1, dan kode lama bisa tidak cocok dengan skema D1 yang sudah
+  dimigrasi maju. Jangan rollback melewati rotasi secret atau perbaikan keamanan; bila
+  terpaksa, jalankan ulang `wrangler secret put` untuk secret yang sudah dirotasi.
+- **Backup D1:** Time Travel D1 menyimpan titik pulih 7 hari terakhir di paket Free (30 hari di Paid)
+  (`npx wrangler d1 time-travel info rasamedan`, `… restore rasamedan --timestamp=…`).
+  Backup manual berkala ke folder yang di-gitignore:
+  `mkdir -p db-export` lalu
+  `npx wrangler d1 export rasamedan --remote --output db-export/backup-YYYYMMDD.sql`
+  (berisi data pribadi & hash password admin — pindahkan ke penyimpanan terenkripsi di
+  luar repo, lalu hapus dari `db-export/`; semua `*.sql` data juga di-gitignore).
+- **Akun Cloudflare:** aktifkan 2FA, anggota akun seminimal mungkin, token API berhak
+  terbatas; `npx wrangler logout` di komputer bersama.
+- **Migrasi skema baru:** tambah `migrations/NNNN_*.sql` → uji `npm run db:migrate` lokal →
+  `npm run db:migrate:remote` **sebelum** deploy kode yang membutuhkannya.
+- **Checklist pre-deploy lengkap:** SKILLS.md 21.3 (isi setiap deploy).

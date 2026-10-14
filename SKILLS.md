@@ -46,7 +46,8 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 28 | Turnstile & rate limit di D1 | ✅ Kode selesai (14 Okt 2026): `lib/rate-limit.ts` di tabel D1 `login_failures` (atomik, tahan restart, lintas isolate) untuk login, cek pesanan, checkout, Pengaturan. Turnstile sudah sejak Skill 21. Rincian 28a |
 | 27 | Upload foto: disk → R2 | ✅ Kode selesai (14 Okt 2026): upload ke R2 `UPLOADS`, route GET `/uploads/[...path]`, skrip `uploads:r2` untuk foto lama; teruji di R2 lokal. ⏳ Pemilik: `wrangler r2 bucket create rasa-medan-uploads`. Rincian 27a |
 | 25 | Migrasi data & seed | ✅ Kode selesai (14 Okt 2026): `db:export` (MySQL → SQL D1), `db:import` (precheck + verifikasi), `db/seed/dummy-products.sql`; teruji dengan MariaDB sungguhan (zona waktu +07:00). ⏳ Ekspor/impor production dijalankan saat cutover (Skill 30). Rincian 25a |
-| 29, 30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
+| 29 | Environment, config & build CI | 🟡 Dokumen & kode selesai (14 Okt 2026), AC belum tuntas sampai pemilik merotasi `ADMIN_SESSION_SECRET` (21.2 no. 1): `DEPLOYMENT.md` Cloudflare (versi cPanel diarsip), `.env.example` baru, checklist 21.3 Cloudflare, deploy guard + peringatan WA dummy. ⏳ Pemilik: rotasi secret via `wrangler secret put`, deploy uji workers.dev, (opsional) Workers Builds. Rincian 29a |
+| 30 | Cutover & pensiun cPanel (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
 
 ---
 
@@ -608,15 +609,21 @@ Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal a
 
 ### 21.3 Checklist pre-deploy Cloudflare Workers (isi setiap kali deploy)
 - [ ] Audit penuh `security-auditor`: tidak ada temuan Kritis/Tinggi yang masih terbuka
-- [ ] `ADMIN_SESSION_SECRET` via `wrangler secret put`, ≥32 karakter acak, belum pernah ter-commit, berbeda dari dev
-- [ ] `TURNSTILE_SECRET_KEY` via `wrangler secret put` + `TURNSTILE_SITE_KEY` di `vars` `wrangler.jsonc`, bukan test key; hostname widget = domain production (+ workers.dev bila staging); `ALLOW_TEST_CAPTCHA` TIDAK diset; login, cek pesanan, checkout diuji di URL deploy
+- [ ] **Selama cPanel masih live:** `ADMIN_SESSION_SECRET` di panel Node.js App cPanel sudah diganti nilai acak baru + Restart, password admin cPanel diganti (nilai lama bocor di riwayat git dan masih diterima kode lama)
+- [ ] `ADMIN_SESSION_SECRET` via `wrangler secret put`, ≥32 karakter acak, belum pernah ter-commit, berbeda dari dev; tidak ada rahasia di `vars`/Build variables (guard menolak nama berbau rahasia di `vars`)
+- [ ] Akun Cloudflare: 2FA aktif, anggota & token API minimal (token Workers Builds ditinjau); token R2 S3 API tidak dibuat atau sudah dicabut
+- [ ] `TURNSTILE_SECRET_KEY` via `wrangler secret put` + `TURNSTILE_SITE_KEY` di `vars` `wrangler.jsonc`, bukan test key; hostname widget = domain production (+ workers.dev bila staging); `ALLOW_TEST_CAPTCHA` TIDAK ada di `vars` maupun `npx wrangler secret list`; `vars.TRUST_CF_CONNECTING_IP` = "1" (guard memeriksa); login, cek pesanan, checkout diuji di URL deploy
 - [ ] `NEXT_PUBLIC_SITE_URL` = domain https asli **saat build** (`npm run deploy` otomatis menolak localhost/http/site key kosong lewat `scripts/check-deploy-env.mjs`); `npm run cf:build` menampilkan `[strip-bundle-secrets] OK`
-- [ ] Migrasi DB terbaru diterapkan ke D1 production (`npm run db:migrate:remote`)
-- [ ] Password admin default sudah diganti
+- [ ] Resource Cloudflare: `database_id` D1 asli di `wrangler.jsonc` (deploy menolak placeholder); bucket R2 `rasa-medan-uploads` ada dan **privat** (r2.dev Disabled, tanpa custom domain); `public/uploads` kosong (deploy menolak)
+- [ ] Migrasi DB terbaru diterapkan ke D1 production (`npm run db:migrate:remote`) **sebelum** deploy kode yang membutuhkannya
+- [ ] Admin production dibuat lewat `npm run seed:admin -- --remote` dengan password ≥12 karakter acak (hash cPanel lama tidak berlaku); `NEXT_PUBLIC_WA_NUMBER` nomor asli (deploy memberi peringatan bila dummy)
 - [ ] `curl -I https://<domain>/` menampilkan CSP, nosniff, X-Frame-Options, Referrer-Policy; tidak ada pelanggaran CSP di console (beranda + peta, produk, checkout + widget, cek pesanan, admin)
 - [ ] SSL Cloudflare aktif; HSTS diaktifkan di dashboard (Skill 30)
+- [ ] Aturan WAF Rate Limiting untuk `/api/admin/auth`, `/api/orders`, `/api/orders/lookup` + notifikasi penggunaan Workers/D1 aktif (28a)
+- [ ] Uji asap `DEPLOYMENT.md` §7 lolos di URL deploy (termasuk upload foto, ganti password, checkout besar); `npx wrangler tail` bersih
 - [ ] `npm audit --omit=dev` tanpa celah tinggi yang relevan; bundle Worker ≤ 3 MiB (`npm run cf:dryrun`)
-- [ ] Tidak ada `.env`/`.dev.vars` di repo atau bundle
+- [ ] Tidak ada `.env`/`.dev.vars`/`*.sql` data (ekspor, backup D1) di repo atau bundle; `git status` bersih dari file data
+- [ ] Workers Builds (bila dipakai): Build variables hanya `NEXT_PUBLIC_*`/`GOOGLE_SITE_VERIFICATION`, build cabang non-produksi dimatikan
 
 **Acceptance Criteria:**
 - [ ] Butir 21.2 no. 1–3 selesai sebelum go-live
@@ -947,6 +954,17 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ---
 
+### 29a — Catatan pelaksanaan (14 Okt 2026)
+
+- **Langkah 1 (menyimpang dari teks, disengaja):** `NEXT_PUBLIC_*` **tidak** ditaruh di `vars` wrangler — Next meng-inline-nya ke JavaScript **saat build** dari `.env`/environment build, sehingga nilai runtime di `vars` tidak berpengaruh. Pembagian akhir (tabel `DEPLOYMENT.md` §0): `NEXT_PUBLIC_*` + `GOOGLE_SITE_VERIFICATION` → `.env` (deploy dari komputer) atau Build variables Workers Builds; non-rahasia runtime (`TURNSTILE_SITE_KEY`, `TRUST_CF_CONNECTING_IP`) → `vars`; rahasia (`ADMIN_SESSION_SECRET`, `TURNSTILE_SECRET_KEY`, nanti `API_CO_ID_KEY`) → `wrangler secret put`. `scripts/strip-bundle-secrets.mjs` (Skill 23) menjamin rahasia `.env` tidak ikut bundle.
+- **Langkah 2:** `.env.example` ditulis ulang: peta lokasi konfigurasi production, tanpa `RECAPTCHA_*`, `DB_*` hanya untuk `db:export` (default SSH tunnel 127.0.0.1:3307), cara membuat secret tanpa `openssl` (Windows).
+- **Langkah 3 (rotasi secret) & 4 (Workers Builds):** tidak bisa dikerjakan tanpa akun Cloudflare pemilik — langkah persis ada di `DEPLOYMENT.md` §3 dan §9. Prosedur resmi sampai Workers Builds aktif: `npm run deploy` dari komputer pemilik (guard + build + penyaring rahasia + deploy). Teruji sejauh tanpa login: `cf:build`, `wrangler deploy --dry-run` (binding DB + UPLOADS, ±1,06 MiB gzip), guard menolak setiap konfigurasi salah.
+- **Langkah 5:** `DEPLOYMENT.md` baru (peta konfigurasi, resource, rahasia, `.env`, DB & admin, deploy, uji asap, WAF & notifikasi, Workers Builds, operasional: `wrangler tail`, rollback, Time Travel/backup D1, alur migrasi skema). Versi cPanel → `docs/legacy/DEPLOYMENT-cpanel.md` (diberi banner arsip).
+- **Langkah 6–7:** README §2/§6/§8/§9 dan checklist 21.3 diperbarui untuk Cloudflare (resource & bucket privat, admin via `seed:admin --remote`, WAF, uji asap).
+- **Tambahan:** `check-deploy-env.mjs` memberi peringatan (tidak memblokir — staging boleh dummy) bila `NEXT_PUBLIC_WA_NUMBER` kosong/dummy development.
+- **Dari review/audit:** perintah admin untuk PowerShell & bash dengan password lewat prompt (tidak tersimpan di riwayat); secret sesi dialirkan `node … | wrangler secret put` (tidak tampil di layar/clipboard); peringatan rotasi secret di **cPanel yang masih live** (temuan Kritis operasional — kode lama masih menerima nilai yang bocor); guard kini menolak nama berbau rahasia (`SECRET|PASSWORD|TOKEN|PRIVATE|API_KEY|_KEY|CREDENTIAL|AUTH`, kecuali allowlist `TURNSTILE_SITE_KEY`)/`DB_*` di `vars` (termasuk `env.*.vars`), `TRUST_CF_CONNECTING_IP` ≠ "1", dan `NEXT_PUBLIC_*` bernama rahasia; `.gitignore` mengabaikan semua `*.sql` kecuali migrations/seed/legacy dan backup D1 diarahkan ke `db-export/`; Workers Builds: larangan rahasia di Build variables + matikan build cabang non-produksi; catatan rollback (secret/skema) & `wrangler tail` (PII); checklist 21.3 & Skill 30 ditambah butir akun Cloudflare, workers_dev/preview_urls, Remote MySQL.
+- **Belum terpenuhi (menunggu pemilik):** AC "push ke main → deploy otomatis" (opsional; alternatif manual terdokumentasi) dan "`ADMIN_SESSION_SECRET` sudah dirotasi" — keduanya butuh akun Cloudflare.
+
 ## Skill 30 — Cutover & Pensiun cPanel
 
 **Tujuan:** Domain asli dilayani Cloudflare Workers dan cPanel dinonaktifkan dengan aman. **GERBANG:** hanya dikerjakan setelah Skill 23–29 selesai dan situs stabil di `*.workers.dev` minimal 48 jam.
@@ -961,6 +979,8 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 6. Observasi 48 jam (Workers analytics + logs). Bila ada masalah besar → kembalikan DNS ke cPanel (rollback terdokumentasi).
 7. Setelah stabil: hentikan Node.js App di cPanel. **Jangan hapus DB MySQL sebelum 30 hari** (cadangan rollback). Jadwalkan backup D1 berkala (`wrangler d1 export` / Time Travel).
 8. Perbarui tabel status di file ini; perbarui PRD §5.1 (tech stack) bila perlu; tandai backlog Skill 15, 21.2 no. 1–6 yang sudah tertutup.
+
+> **Tambahan dari audit Skill 29:** setelah domain asli aktif — ganti `NEXT_PUBLIC_SITE_URL` ke `https://rasamedan.com` dan deploy ulang; set `"workers_dev": false` dan `"preview_urls": false` di `wrangler.jsonc` (URL workers.dev/preview melewati aturan WAF zona); hapus hostname workers.dev dari widget Turnstile; tutup Remote MySQL & hapus user MySQL ekspor di cPanel; pastikan tidak ada tabel `_seed_guard` tertinggal di D1 production; ambil bookmark Time Travel sebelum & sesudah impor.
 
 **Acceptance Criteria:**
 

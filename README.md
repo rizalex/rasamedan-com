@@ -1,6 +1,6 @@
 # Rasa Medan — Oleh-Oleh Khas Medan
 
-> ⚠️ **Status (Skill 23, 13 Okt 2026):** aplikasi sedang dimigrasi ke Cloudflare Workers. `server.js` sudah dihapus dari `main`, jadi bagian deploy & `server.js` untuk cPanel di bawah **tidak lagi berlaku untuk `main`**. Hotfix cPanel darurat: checkout commit `fb4ea12`. Dokumen ini ditulis ulang untuk Cloudflare di Skill 29.
+> **Status (14 Okt 2026):** kode sudah berjalan di Cloudflare Workers (D1, R2, Turnstile — Skill 23–29). Situs production lama masih di cPanel sampai cutover Skill 30; hotfix cPanel darurat hanya dari commit `fb4ea12` (`docs/legacy/DEPLOYMENT-cpanel.md`).
 
 Website katalog + pemesanan untuk UMKM oleh-oleh khas Medan. Pelanggan browsing & checkout **tanpa akun/login**; transaksi diselesaikan manual via WhatsApp. Admin mengelola produk, kategori, dan status pesanan via dashboard.
 
@@ -111,16 +111,18 @@ Cek runtime Workers lokal: `npm run preview` (http://localhost:8787, memakai D1 
 
 ## 6. Environment Variables
 
-| Var | Keterangan |
-|---|---|
-| `NEXT_PUBLIC_WA_NUMBER` | WA utama pemesanan, tanpa `+` (dev: dummy `62812...`) |
-| `NEXT_PUBLIC_WA_NUMBER_ALT` | WA alternatif layanan umum (opsional) |
-| `ADMIN_SESSION_SECRET` | Secret HMAC sesi (acak panjang) |
-| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile. Dev: kosong = captcha dilewati (atau test key `1x…`). Production: wajib key asli — tanpa secret request ditolak; site key lewat `vars` wrangler, secret lewat `wrangler secret put` |
-| `NEXT_PUBLIC_SITE_URL` | Canonical/OG/sitemap (wajib domain asli saat live, tanpa trailing slash) |
-| `NEXT_PUBLIC_STORE_NAME/ADDRESS/MAPS_EMBED_URL/MAPS_LINK_URL/STORE_HOURS_WEEKDAY/WEEKEND/IG_URL/TIKTOK_URL/FB_URL` | Lokasi toko & kontak (Skill 18) |
-| `GOOGLE_SITE_VERIFICATION` | Token Search Console (opsional) |
-| `NODE_ENV=production` | Di server |
+Ringkas (rincian & lokasi tiap nilai: `DEPLOYMENT.md` §0):
+
+| Var | Lokasi production | Keterangan |
+|---|---|---|
+| `NEXT_PUBLIC_SITE_URL` | `.env` saat build / Build variables CI | URL https asli, tanpa trailing slash; canonical/OG/sitemap + cek hostname Turnstile |
+| `NEXT_PUBLIC_WA_NUMBER`, `NEXT_PUBLIC_WA_NUMBER_ALT` | idem | WA pemesanan / layanan umum, format `62…` tanpa `+` (dev: dummy) |
+| `NEXT_PUBLIC_STORE_*`, `NEXT_PUBLIC_MAPS_*`, `NEXT_PUBLIC_IG/TIKTOK/FB_URL` | idem | Lokasi toko & kontak (Skill 18) |
+| `GOOGLE_SITE_VERIFICATION` | idem | Token Search Console (opsional) |
+| `TURNSTILE_SITE_KEY` | `vars` di `wrangler.jsonc` | Site key Turnstile (bukan test key) |
+| `TRUST_CF_CONNECTING_IP` | `vars` di `wrangler.jsonc` | `"1"` — IP klien dari edge Cloudflare |
+| `ADMIN_SESSION_SECRET`, `TURNSTILE_SECRET_KEY` | `wrangler secret put` | Rahasia runtime (lokal: `.env` untuk `next dev`, `.dev.vars` untuk preview) |
+| `DB_*` | — | Hanya untuk `npm run db:export` (migrasi data cPanel) |
 
 ## 7. Alur Fitur Penting
 
@@ -134,12 +136,12 @@ Cek runtime Workers lokal: `npm run preview` (http://localhost:8787, memakai D1 
 
 ## 8. Deploy (ringkas)
 
-Target: Cloudflare Workers (migrasi Skill 23–30; panduan lengkap ditulis ulang di Skill 29). Urutan saat ini: `npx wrangler d1 create rasamedan` + `npx wrangler r2 bucket create rasa-medan-uploads` → salin `database_id` ke `wrangler.jsonc` → `npm run db:migrate:remote` → `npm run seed:admin -- --remote` → `npm run uploads:r2 -- --dir <foto cPanel> --remote` → isi `TURNSTILE_SITE_KEY` + secret (`wrangler secret put`) → `npm run deploy` (diblokir `scripts/check-deploy-env.mjs` bila konfigurasi belum lengkap). `DEPLOYMENT.md` masih versi cPanel (hanya untuk hotfix dari commit `fb4ea12`).
+Panduan lengkap: **`DEPLOYMENT.md`**. Sekali di awal: `npx wrangler login` → `npx wrangler d1 create rasamedan` (salin `database_id` ke `wrangler.jsonc`) + `npx wrangler r2 bucket create rasa-medan-uploads` (privat) → widget Turnstile (site key ke `vars`) → `wrangler secret put ADMIN_SESSION_SECRET` & `TURNSTILE_SECRET_KEY` → isi `.env` (`NEXT_PUBLIC_*`) → `npm run db:migrate:remote` → `npm run seed:admin -- --remote`. Setiap rilis: `npm run deploy` (diblokir `scripts/check-deploy-env.mjs` bila konfigurasi belum benar) lalu uji asap (`DEPLOYMENT.md` §7). Deploy otomatis dari GitHub (Workers Builds) opsional — §9.
 
 ## 9. Peta Dokumen
 
 - `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md` — requirement & roadmap
 - `CLAUDE.md` — aturan agent/tech stack/aturan bisnis/DoD
-- `SKILLS.md` — satu file berisi Skill 1–12 (MVP), 13–19 (berat, kategori, Turnstile, pengaturan, redesign, lokasi, SEO), 20–21 (code & security review), 22 (lacak pengiriman)
+- `SKILLS.md` — satu file berisi Skill 1–12 (MVP), 13–19 (berat, kategori, Turnstile, pengaturan, redesign, lokasi, SEO), 20–21 (code & security review), 22 (lacak pengiriman), 23–30 (migrasi ke Cloudflare Workers)
 - `.claude/agents/` — subagent `architect`, `code-reviewer`, `security-auditor`
-- `DEPLOYMENT.md` — panduan cPanel langkah-demi-langkah
+- `DEPLOYMENT.md` — panduan deploy Cloudflare Workers (konfigurasi, resource, rahasia, uji asap, Workers Builds, operasional) · `docs/legacy/` — arsip cPanel/MySQL

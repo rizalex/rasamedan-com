@@ -5,6 +5,8 @@
  *   di-inline saat build ke canonical/sitemap dan dipakai cek hostname Turnstile.
  * - TURNSTILE_SITE_KEY kosong atau masih test key di wrangler.jsonc `vars`.
  * - database_id D1 masih placeholder (Skill 24).
+ * - rahasia di `vars` (termasuk env.*.vars), TRUST_CF_CONNECTING_IP bukan "1", atau
+ *   NEXT_PUBLIC_* bernama rahasia (Skill 29).
  * - public/uploads berisi file (Skill 27: akan menimpa route R2 sebagai aset statis).
  *
  * `npm run preview` tidak memakai skrip ini (preview lokal memang localhost).
@@ -16,6 +18,11 @@ const { loadEnvConfig } = await import("@next/env").then((m) => m.default ?? m);
 loadEnvConfig(process.cwd(), false);
 
 const problems = [];
+
+// Nama variabel yang berbau rahasia (dipakai untuk `vars` dan NEXT_PUBLIC_*).
+// `_KEY` menangkap mis. API_CO_ID_KEY (Skill 22); kunci publik dikecualikan eksplisit.
+const SECRET_LIKE = /SECRET|PASSWORD|PASS$|TOKEN|PRIVATE|API_?KEY|_KEY$|CREDENTIAL|AUTH/i;
+const PUBLIC_KEY_ALLOWLIST = new Set(["TURNSTILE_SITE_KEY"]);
 
 const raw = process.env.NEXT_PUBLIC_SITE_URL ?? "";
 let url = null;
@@ -50,9 +57,24 @@ try {
     );
   }
   siteKey = vars.TURNSTILE_SITE_KEY ?? "";
-  // Flag ini meloloskan test key captcha — hanya untuk preview lokal (.dev.vars).
-  if ("ALLOW_TEST_CAPTCHA" in vars) {
-    problems.push("ALLOW_TEST_CAPTCHA tidak boleh ada di wrangler.jsonc `vars` (mematikan captcha production)");
+  // Semua blok vars (top-level + env.<nama>.vars) ikut diperiksa.
+  const allVars = [vars, ...Object.values(config.env ?? {}).map((e) => e?.vars ?? {})];
+  for (const v of allVars) {
+    // Flag ini meloloskan test key captcha — hanya untuk preview lokal (.dev.vars).
+    if ("ALLOW_TEST_CAPTCHA" in v) {
+      problems.push("ALLOW_TEST_CAPTCHA tidak boleh ada di wrangler.jsonc `vars` (mematikan captcha production)");
+    }
+    // `vars` di-commit ke repo: rahasia di sini = rahasia publik.
+    for (const key of Object.keys(v)) {
+      if ((SECRET_LIKE.test(key) || key.startsWith("DB_")) && !PUBLIC_KEY_ALLOWLIST.has(key)) {
+        problems.push(`${key} tidak boleh di \`vars\` wrangler.jsonc (di-commit) — pakai \`npx wrangler secret put ${key}\``);
+      }
+    }
+  }
+  // Tanpa flag ini semua pengunjung berbagi satu ember rate limit (lib/client-ip.ts):
+  // satu penyerang bisa mengunci login/cek pesanan/checkout untuk semua orang.
+  if (vars.TRUST_CF_CONNECTING_IP !== "1") {
+    problems.push('vars.TRUST_CF_CONNECTING_IP harus "1" (IP klien dari edge Cloudflare untuk rate limit)');
   }
 } catch {
   problems.push("wrangler.jsonc tidak bisa dibaca untuk memeriksa vars");
@@ -65,6 +87,20 @@ else if (/^[123]x0{10,}/.test(siteKey)) problems.push("TURNSTILE_SITE_KEY masih 
 // disajikan tanpa allowlist tipe (risiko XSS bila ada .html/.svg).
 if (existsSync("public/uploads") && readdirSync("public/uploads").length > 0) {
   problems.push("public/uploads berisi file — foto produk harus di R2 (npm run uploads:r2 -- --dir <folder di luar public>), lalu kosongkan/hapus folder itu");
+}
+
+// NEXT_PUBLIC_* di-inline ke JavaScript klien — nama berbau rahasia hampir pasti salah tempat.
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith("NEXT_PUBLIC_") && SECRET_LIKE.test(key.slice("NEXT_PUBLIC_".length))) {
+    problems.push(`${key}: variabel NEXT_PUBLIC_* terbaca publik di browser — rahasia jangan diberi awalan ini`);
+  }
+}
+
+// Peringatan (tidak memblokir — staging boleh memakai dummy): nomor WA dummy
+// development (CLAUDE.md §6) membuat semua pesanan production nyasar.
+const waNumber = process.env.NEXT_PUBLIC_WA_NUMBER ?? "";
+if (!waNumber || ["6281200000000", "6281300000000"].includes(waNumber)) {
+  console.warn(`⚠️  NEXT_PUBLIC_WA_NUMBER masih kosong/dummy ("${waNumber}") — wajib nomor asli sebelum go-live.`);
 }
 
 if (problems.length > 0) {
