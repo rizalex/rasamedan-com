@@ -24,6 +24,9 @@ export type AdminOrder = {
   total_estimate: number | null;
   /** ISO-8601 UTC, mis. "2026-10-14T03:00:00Z". */
   created_at: string;
+  /** Pengiriman (Skill 22): kode di lib/couriers.mjs & nomor resi, null bila belum. */
+  courier_code: string | null;
+  waybill: string | null;
   items: AdminOrderItem[];
 };
 
@@ -53,7 +56,8 @@ export async function getAdminOrders(filter: {
 
   const orders = await query<OrderRow>(
     `SELECT id, order_code, recipient_name, phone, fulfillment_method,
-            address, city, location_note, note, status, total_estimate, created_at
+            address, city, location_note, note, status, total_estimate, created_at,
+            courier_code, waybill
        FROM orders ${whereSql}
       ORDER BY created_at DESC, id DESC
       LIMIT 200`,

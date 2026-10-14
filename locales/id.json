@@ -106,7 +106,15 @@
     "searching": "Mencari...",
     "noResults": "Tidak ada pesanan ditemukan untuk data tersebut.",
     "errPhone": "Nomor HP wajib diisi.",
-    "errGeneric": "Terjadi kesalahan. Silakan coba lagi."
+    "errGeneric": "Terjadi kesalahan. Silakan coba lagi.",
+    "shipment": "Pengiriman",
+    "waybill": "No. resi",
+    "copy": "Salin",
+    "copied": "Tersalin",
+    "trackOnCourier": "Lacak di situs kurir",
+    "trackHint": "Tempel nomor resi di halaman lacak kurir.",
+    "otherCourier": "Kurir",
+    "waybillNeedsCode": "Masukkan Order ID pesanan ini (ada di pesan WhatsApp Anda) untuk melihat nomor resi pengiriman."
   },
   "categories": {
     "all": "Semua",

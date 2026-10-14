@@ -19,9 +19,12 @@ const STATUSES = [
 export default function OrderStatusSelect({
   orderId,
   current,
+  needsWaybill = false,
 }: {
   orderId: number;
   current: string;
+  /** Pesanan kurir yang belum punya resi (Skill 22.2) — untuk peringatan "Dikirim". */
+  needsWaybill?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(current);
@@ -72,6 +75,12 @@ export default function OrderStatusSelect({
     {error && (
       <div className={styles.errorText} role="alert">
         {error}
+      </div>
+    )}
+    {/* Peringatan, bukan blokir: resi boleh diisi belakangan (Skill 22.2). */}
+    {status === "Dikirim" && needsWaybill && (
+      <div className={styles.warnText} role="status">
+        Status Dikirim tapi resi belum diisi.
       </div>
     )}
     </>

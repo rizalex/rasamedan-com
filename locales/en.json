@@ -106,7 +106,15 @@
     "searching": "Searching...",
     "noResults": "No orders found for that information.",
     "errPhone": "Phone number is required.",
-    "errGeneric": "Something went wrong. Please try again."
+    "errGeneric": "Something went wrong. Please try again.",
+    "shipment": "Shipment",
+    "waybill": "Tracking no.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "trackOnCourier": "Track on courier site",
+    "trackHint": "Paste the tracking number on the courier's tracking page.",
+    "otherCourier": "Courier",
+    "waybillNeedsCode": "Enter this order's Order ID (in your WhatsApp message) to see the shipment tracking number."
   },
   "categories": {
     "all": "All",

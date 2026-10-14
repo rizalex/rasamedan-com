@@ -1,6 +1,7 @@
 import { getAdminOrders } from "@/lib/orders-db";
 import { formatRupiah, formatDateTime } from "@/lib/format";
 import OrderStatusSelect from "@/components/admin/OrderStatusSelect";
+import ShipmentForm from "@/components/admin/ShipmentForm";
 import styles from "@/components/admin/admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,8 @@ export default async function AdminOrdersPage({
       <h1 className={styles.pageTitle}>Pesanan</h1>
       <p className={styles.pageDesc}>
         Ubah status pesanan — perubahan langsung terlihat pelanggan di halaman
-        &quot;Cek Pesanan&quot;.
+        &quot;Cek Pesanan&quot;. Untuk pesanan kurir, isi kurir &amp; nomor resi agar
+        pelanggan bisa melacak paketnya sendiri.
       </p>
 
       {/* Filter */}
@@ -113,7 +115,18 @@ export default async function AdminOrdersPage({
                       : "-"}
                   </td>
                   <td>
-                    <OrderStatusSelect orderId={o.id} current={o.status} />
+                    <OrderStatusSelect
+                      orderId={o.id}
+                      current={o.status}
+                      needsWaybill={o.fulfillment_method === "kurir" && !o.waybill}
+                    />
+                    {o.fulfillment_method === "kurir" && (
+                      <ShipmentForm
+                        orderId={o.id}
+                        courierCode={o.courier_code}
+                        waybill={o.waybill}
+                      />
+                    )}
                   </td>
                 </tr>
               ))

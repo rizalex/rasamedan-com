@@ -143,6 +143,12 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 
 ---
 
+### 3.10 Lacak Pengiriman (Skill 22)
+- Untuk pesanan bermetode kurir, admin mengisi **kurir** dan **nomor resi** di dashboard pesanan setelah paket diserahkan ke kurir.
+- Pelanggan melihat nama kurir, nomor resi (bisa disalin), dan tautan ke halaman lacak resmi kurir di halaman **Cek Status Pesanan** — nomor resi hanya tampil bila pencarian menyertakan **Order ID** pesanan tersebut, karena resi membuka lokasi & waktu antar di situs kurir. Pencarian dengan nomor HP saja menampilkan Order ID tersamar (mis. `ORD-20261014-••••`) — Order ID lengkap ada di pesan WhatsApp pembeli.
+- Linimasa perjalanan paket langsung di situs (via api.co.id) menyusul setelah verifikasi API (SKILLS 22.0/22.4).
+- **Di luar cakupan (tetap):** ongkir otomatis, pemesanan kurir otomatis, dan perubahan status otomatis — status pesanan tetap diubah manual oleh admin.
+
 ## 4. Desain & Identitas Visual
 
 ### 4.1 Arahan Warna (Nuansa Melayu/Medan)

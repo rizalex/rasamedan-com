@@ -39,7 +39,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Body tidak valid" }, { status: 400 });
   }
 
-  const status = String(body.status ?? "");
+  const status = String(body?.status ?? "");
   if (!VALID_STATUS.includes(status)) {
     return NextResponse.json({ error: "Status tidak valid" }, { status: 400 });
   }

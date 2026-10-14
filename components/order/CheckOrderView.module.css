@@ -140,3 +140,46 @@
   color: var(--color-text);
   font-weight: 500;
 }
+
+/* Skill 22: info pengiriman (resi + tautan lacak kurir) */
+.shipment {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 10px;
+  font-size: 14px;
+}
+.shipmentTitle {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.shipmentLine {
+  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+}
+.shipmentLine a {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+.waybill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+.copyBtn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.shipmentHint {
+  font-size: 12px;
+  color: var(--color-muted);
+}

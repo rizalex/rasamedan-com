@@ -3,9 +3,15 @@ import { dbErrorMessage, placeholders, query } from "@/lib/db";
 import { verifyCaptcha } from "@/lib/turnstile";
 import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
 import { isValidPhone, normalizePhone } from "@/lib/phone.mjs";
+import { findCourier } from "@/lib/couriers.mjs";
 import { consumeRateLimit, refundRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+/** "ORD-20261014-0005" → "ORD-20261014-••••" (tanggal tetap, nomor urut disamarkan). */
+function maskOrderCode(orderCode: string): string {
+  return orderCode.replace(/-[^-]+$/, "-••••");
+}
 
 interface OrderRow {
   id: number;
@@ -16,6 +22,8 @@ interface OrderRow {
   total_estimate: number | null;
   /** ISO-8601 UTC. */
   created_at: string;
+  courier_code: string | null;
+  waybill: string | null;
 }
 
 interface OrderItemRow {
@@ -92,7 +100,7 @@ export async function POST(req: Request) {
     // hanya menormalisasi nomor seluler 08…).
     const params: (string | number)[] = [phoneNorm, phone];
     let sql =
-      "SELECT id, order_code, recipient_name, fulfillment_method, status, total_estimate, created_at FROM orders WHERE phone IN (?, ?)";
+      "SELECT id, order_code, recipient_name, fulfillment_method, status, total_estimate, created_at, courier_code, waybill FROM orders WHERE phone IN (?, ?)";
     if (code) {
       sql += " AND order_code = ?";
       params.push(code);
@@ -120,12 +128,29 @@ export async function POST(req: Request) {
     );
 
     const result = orders.map((o) => ({
-      order_code: o.order_code,
+      // Order ID adalah faktor kedua untuk melihat resi (Skill 22), jadi pada
+      // pencarian dengan nomor HP saja nomor urutnya disamarkan — kalau tidak,
+      // pencari cukup mengulang dengan Order ID dari respons ini. Pembeli asli
+      // punya Order ID lengkap di pesan WhatsApp-nya.
+      order_code: code ? o.order_code : maskOrderCode(o.order_code),
       recipient_name: o.recipient_name,
       fulfillment_method: o.fulfillment_method,
       status: o.status,
       total_estimate: o.total_estimate,
       created_at: o.created_at,
+      // Lacak pengiriman (Skill 22, jalur cadangan): resi + halaman lacak resmi
+      // kurir. Resi membuka lokasi/waktu antar di situs kurir, jadi HANYA dikirim
+      // bila Order ID juga cocok. Tidak ada penanda "resi tersedia" untuk
+      // pencarian HP saja, dan tidak ada endpoint publik yang menerima resi bebas.
+      shipment:
+        code && o.fulfillment_method === "kurir" && o.waybill
+          ? {
+              courier_code: o.courier_code,
+              courier_name: findCourier(o.courier_code)?.name ?? null,
+              waybill: o.waybill,
+              track_url: findCourier(o.courier_code)?.trackUrl ?? null,
+            }
+          : null,
       items: items
         .filter((it) => it.order_id === o.id)
         .map((it) => ({

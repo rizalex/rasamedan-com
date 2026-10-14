@@ -15,6 +15,12 @@ type LookupItem = {
   quantity: number;
   unit_price: number;
 };
+type LookupShipment = {
+  courier_code: string | null;
+  courier_name: string | null;
+  waybill: string;
+  track_url: string | null;
+};
 type LookupOrder = {
   order_code: string;
   recipient_name: string;
@@ -22,8 +28,53 @@ type LookupOrder = {
   status: OrderStatus;
   total_estimate: number | null;
   created_at: string;
+  /** Resi & tautan lacak — hanya dikirim server bila dicari dengan Order ID. */
+  shipment: LookupShipment | null;
   items: LookupItem[];
 };
+
+/** Resi + tombol salin + tautan lacak resmi kurir (Skill 22, jalur cadangan). */
+function ShipmentInfo({ shipment }: { shipment: LookupShipment }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const courier =
+    shipment.courier_code === "lainnya" || !shipment.courier_name
+      ? t("checkOrder.otherCourier")
+      : shipment.courier_name;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(shipment.waybill);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard tidak tersedia — resi tetap terlihat untuk disalin manual */
+    }
+  }
+
+  return (
+    <div className={styles.shipment}>
+      <p className={styles.shipmentTitle}>{t("checkOrder.shipment")}</p>
+      <p className={styles.shipmentLine}>
+        <span>{courier}</span>
+        <span>
+          {t("checkOrder.waybill")}: <strong className={styles.waybill}>{shipment.waybill}</strong>
+        </span>
+        <button type="button" className={styles.copyBtn} onClick={copy}>
+          {copied ? t("checkOrder.copied") : t("checkOrder.copy")}
+        </button>
+      </p>
+      {shipment.track_url && (
+        <p className={styles.shipmentLine}>
+          <a href={shipment.track_url} target="_blank" rel="noopener noreferrer">
+            {t("checkOrder.trackOnCourier")} ↗
+          </a>
+          <span className={styles.shipmentHint}>{t("checkOrder.trackHint")}</span>
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function CheckOrderView({ captchaSiteKey }: { captchaSiteKey: string }) {
   const { t, locale } = useI18n();
@@ -32,6 +83,8 @@ export default function CheckOrderView({ captchaSiteKey }: { captchaSiteKey: str
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orders, setOrders] = useState<LookupOrder[] | null>(null);
+  // Apakah pencarian TERAKHIR memakai Order ID (bukan isi kolom saat ini).
+  const [searchedWithCode, setSearchedWithCode] = useState(false);
   const [token, setToken] = useState("");
 
   const captcha = useRef<CaptchaHandle>(null);
@@ -62,6 +115,7 @@ export default function CheckOrderView({ captchaSiteKey }: { captchaSiteKey: str
         const key = captchaErrorKey(data.code);
         setError(key ? t(key) : data.error ?? t("checkOrder.errGeneric"));
       } else {
+        setSearchedWithCode(!!code.trim());
         setOrders(data.orders);
       }
     } catch {
@@ -118,8 +172,9 @@ export default function CheckOrderView({ captchaSiteKey }: { captchaSiteKey: str
             <p className={styles.noResults}>{t("checkOrder.noResults")}</p>
           ) : (
             <ul className={styles.list}>
-              {orders.map((o) => (
-                <li key={o.order_code} className={styles.card}>
+              {orders.map((o, i) => (
+                // Indeks: Order ID bisa tersamar (sama untuk dua pesanan di hari yang sama).
+                <li key={i} className={styles.card}>
                   <div className={styles.cardHead}>
                     <div>
                       <p className={styles.code}>{o.order_code}</p>
@@ -141,6 +196,18 @@ export default function CheckOrderView({ captchaSiteKey }: { captchaSiteKey: str
                       </li>
                     ))}
                   </ul>
+
+                  {o.shipment ? (
+                    <ShipmentInfo shipment={o.shipment} />
+                  ) : (
+                    // Petunjuk dari status yang memang sudah terlihat — server tidak
+                    // memberi tahu apakah resi ada tanpa Order ID.
+                    o.fulfillment_method === "kurir" &&
+                    !searchedWithCode &&
+                    (o.status === "Dikirim" || o.status === "Selesai") && (
+                      <p className={styles.shipmentHint}>{t("checkOrder.waybillNeedsCode")}</p>
+                    )
+                  )}
 
                   <div className={styles.cardFoot}>
                     <span>
