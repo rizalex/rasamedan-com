@@ -194,6 +194,11 @@ Sampai Workers Builds diaktifkan, `npm run deploy` dari komputer pemilik adalah 
   `npx wrangler d1 export rasamedan --remote --output db-export/backup-YYYYMMDD.sql`
   (berisi data pribadi & hash password admin — pindahkan ke penyimpanan terenkripsi di
   luar repo, lalu hapus dari `db-export/`; semua `*.sql` data juga di-gitignore).
+- **Menarik foto bermasalah** (salah unggah, hak cipta, ada data pribadi): foto disimpan di cache
+  edge & browser (`immutable`, 1 tahun) — menghapus objek R2 saja tidak cukup. (1) Ganti foto produk
+  di admin (upload baru = nama file baru); (2) hapus objek lama: `npx wrangler r2 object delete
+  rasa-medan-uploads/uploads/<nama> --remote`; (3) dashboard → Caching → Purge Cache → Custom
+  Purge → URL `https://<domain>/uploads/<nama>`.
 - **Akun Cloudflare:** aktifkan 2FA, anggota akun seminimal mungkin, token API berhak
   terbatas; `npx wrangler logout` di komputer bersama.
 - **Migrasi skema baru:** tambah `migrations/NNNN_*.sql` → uji `npm run db:migrate` lokal →

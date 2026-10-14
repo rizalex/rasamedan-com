@@ -1,5 +1,11 @@
 import { dbErrorMessage } from "@/lib/db";
-import { SERVABLE_IMAGE_TYPES, objectKeyFromSegments, uploadsBucket } from "@/lib/uploads";
+import {
+  SERVABLE_IMAGE_TYPES,
+  edgeCache,
+  objectKeyFromSegments,
+  runAfterResponse,
+  uploadsBucket,
+} from "@/lib/uploads";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +19,29 @@ function notFound() {
   });
 }
 
+/** If-None-Match bisa berisi daftar ETag dan/atau ETag lemah (W/"..."). */
+function etagMatches(req: Request, etag: string | null): boolean {
+  if (!etag) return false;
+  const strip = (tag: string) => tag.trim().replace(/^W\//, "");
+  const wanted = (req.headers.get("if-none-match") ?? "").split(",").map(strip);
+  return wanted.includes("*") || wanted.includes(strip(etag));
+}
+
+/** 304 dengan header yang sama dengan respons 200 (tanpa body/Content-Length). */
+function notModified(headers: Headers): Response {
+  const h = new Headers(headers);
+  h.delete("Content-Length");
+  return new Response(null, { status: 304, headers: h });
+}
+
 /**
  * GET /uploads/<nama> — sajikan foto produk dari R2 (Skill 27). Path URL sama
  * dengan era disk `public/uploads`, jadi data `products.image` lama tetap valid.
  * Hanya tipe gambar raster yang disajikan inline; objek bertipe lain (mis.
  * diunggah manual) diunduh sebagai lampiran agar tidak bisa dieksekusi browser.
+ *
+ * Respons 200 disimpan di cache edge (backlog Skill 27): kunci cache = path saja
+ * (query string diabaikan, sehingga `?x=acak` tidak bisa memaksa baca R2).
  */
 export async function GET(
   req: Request,
@@ -27,7 +51,19 @@ export async function GET(
   const key = objectKeyFromSegments(path);
   if (!key) return notFound();
 
+  // Kunci dari kunci objek tervalidasi (bukan pathname mentah): variasi encoding
+  // URL untuk objek yang sama memakai satu entri cache.
+  const url = new URL(req.url);
+  const cacheKey = new Request(`${url.origin}/${key}`, { method: "GET" });
+  const cache = edgeCache();
+
   try {
+    const cached = cache ? await cache.match(cacheKey) : undefined;
+    if (cached) {
+      if (etagMatches(req, cached.headers.get("ETag"))) return notModified(cached.headers);
+      return cached;
+    }
+
     const obj = await uploadsBucket().get(key);
     if (!obj) return notFound();
 
@@ -44,14 +80,15 @@ export async function GET(
       headers.set("Content-Disposition", "attachment");
     }
 
-    // If-None-Match bisa berisi daftar ETag dan/atau ETag lemah (W/"...").
-    const strip = (tag: string) => tag.trim().replace(/^W\//, "");
-    const wanted = (req.headers.get("if-none-match") ?? "").split(",").map(strip);
-    if (wanted.includes("*") || wanted.includes(strip(obj.httpEtag))) {
-      return new Response(null, { status: 304, headers });
+    if (etagMatches(req, obj.httpEtag)) {
+      // Body R2 tidak dipakai — batalkan stream agar tidak menggantung.
+      void obj.body.cancel().catch(() => {});
+      return notModified(headers);
     }
     headers.set("Content-Length", String(obj.size));
-    return new Response(obj.body, { status: 200, headers });
+    const response = new Response(obj.body, { status: 200, headers });
+    if (cache) runAfterResponse(cache.put(cacheKey, response.clone()));
+    return response;
   } catch (err) {
     console.error("GET /uploads gagal:", dbErrorMessage(err));
     return new Response("Error", { status: 500, headers: { "Cache-Control": "no-store" } });

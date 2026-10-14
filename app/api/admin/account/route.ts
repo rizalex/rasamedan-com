@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth";
 import { consumeRateLimit, refundRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
+import { verifyCaptcha } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export async function PUT(req: Request) {
     newUsername?: string;
     newPassword?: string;
     confirmPassword?: string;
+    captchaToken?: string;
   };
   try {
     body = await req.json();
@@ -71,7 +73,8 @@ export async function PUT(req: Request) {
   // mengetahui password admin): 5 salah / 15 menit per akun PER JARINGAN, sama
   // dengan login. IP ikut di kunci agar pencuri cookie tidak bisa mengunci admin
   // asli dari ganti password (satu-satunya cara di UI mencabut sesi curian).
-  const rlKey = `account:${session.sub}:${rateLimitKeyFromIp(getClientIp(req))}`;
+  const ip = getClientIp(req);
+  const rlKey = `account:${session.sub}:${rateLimitKeyFromIp(ip)}`;
   const rl = await consumeRateLimit(rlKey);
   if (rl.limited) {
     const mins = Math.ceil(rl.retryAfterSec / 60);
@@ -79,6 +82,15 @@ export async function PUT(req: Request) {
       { error: `Terlalu banyak percobaan. Coba lagi dalam ${mins} menit.` },
       { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
     );
+  }
+
+  // Turnstile SEBELUM cek password (sama seperti login): pemegang cookie curian
+  // dengan banyak IP tetap butuh satu captcha per tebakan.
+  const captcha = await verifyCaptcha(String(body.captchaToken ?? ""), ip, "account");
+  if (!captcha.ok) {
+    // 503 = salah konfigurasi server (bukan ulah klien) → jatah dikembalikan.
+    if (captcha.status === 503) await refundRateLimit(rlKey, rl.stamp);
+    return NextResponse.json({ error: captcha.code, code: captcha.code }, { status: captcha.status });
   }
 
   try {

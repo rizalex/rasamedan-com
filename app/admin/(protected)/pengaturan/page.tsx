@@ -1,5 +1,6 @@
 import { query } from "@/lib/db";
 import { getAdminSession } from "@/lib/auth";
+import { getCaptchaSiteKey } from "@/lib/turnstile";
 import AccountSettingsForm from "@/components/admin/AccountSettingsForm";
 import styles from "@/components/admin/admin.module.css";
 
@@ -25,7 +26,7 @@ export default async function AdminSettingsPage() {
         mengonfirmasi setiap perubahan. Setelah password diganti, Anda akan
         diminta login ulang.
       </p>
-      <AccountSettingsForm currentUsername={currentUsername} />
+      <AccountSettingsForm currentUsername={currentUsername} captchaSiteKey={getCaptchaSiteKey()} />
     </div>
   );
 }

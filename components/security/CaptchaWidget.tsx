@@ -5,7 +5,7 @@ import { useI18n } from "@/components/i18n/I18nProvider";
 import styles from "./CaptchaWidget.module.css";
 
 /**
- * Widget Cloudflare Turnstile bersama (login admin, cek pesanan, checkout).
+ * Widget Cloudflare Turnstile bersama (login admin, pengaturan akun admin, cek pesanan, checkout).
  * Skill 15 / 21.2 no. 3. Token sekali pakai & berlaku 300 detik → pemanggil WAJIB
  * memanggil `reset()` setelah setiap submit (sukses maupun gagal).
  * Bila `siteKey` kosong (development tanpa captcha) widget tidak dirender.
@@ -52,7 +52,7 @@ export default function CaptchaWidget({
   ref,
 }: {
   siteKey: string;
-  action: "login" | "check-order" | "checkout";
+  action: "login" | "check-order" | "checkout" | "account";
   /** Dipanggil dengan token baru, atau "" saat kedaluwarsa/error/reset. */
   onToken: (token: string) => void;
   ref?: Ref<CaptchaHandle>;

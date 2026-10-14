@@ -23,6 +23,26 @@ export function uploadsBucket(): R2Bucket {
   return bucket;
 }
 
+/**
+ * Cache edge Cloudflare (`caches.default`) untuk respons foto — menghemat
+ * operasi baca R2 (Class B) untuk gambar yang sering dilihat. null bila tidak
+ * tersedia (`next dev` di Node). Catatan: di subdomain *.workers.dev Cache API
+ * tidak menyimpan apa pun (no-op); efektif setelah custom domain aktif (Skill 30).
+ */
+export function edgeCache(): Cache | null {
+  const storage = (globalThis as { caches?: { default?: Cache } }).caches;
+  return storage?.default ?? null;
+}
+
+/** Jalankan promise setelah respons terkirim (Workers), tanpa menahan respons. */
+export function runAfterResponse(promise: Promise<unknown>): void {
+  try {
+    getCloudflareContext().ctx.waitUntil(promise);
+  } catch {
+    void promise.catch(() => {});
+  }
+}
+
 /** Nama file baru dari server: `<epoch-ms>-<12 hex acak>.<ext>`. */
 export function newUploadName(ext: string): string {
   const rand = crypto.getRandomValues(new Uint8Array(6));

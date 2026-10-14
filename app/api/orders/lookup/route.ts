@@ -87,8 +87,9 @@ export async function POST(req: Request) {
   let refunded = false;
   try {
     // phone selalu difilter; code opsional sebagai filter tambahan (bukan pengganti).
-    // Cocokkan format ternormalisasi (pesanan baru) DAN input apa adanya (pesanan
-    // lama yang tersimpan sebelum normalisasi diterapkan).
+    // Cocokkan format ternormalisasi (pesanan baru) DAN input apa adanya
+    // (pesanan cPanel lama: kode cPanel tidak menormalisasi nomor; ekspor Skill 25
+    // hanya menormalisasi nomor seluler 08…).
     const params: (string | number)[] = [phoneNorm, phone];
     let sql =
       "SELECT id, order_code, recipient_name, fulfillment_method, status, total_estimate, created_at FROM orders WHERE phone IN (?, ?)";
