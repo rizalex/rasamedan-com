@@ -47,7 +47,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 27 | Upload foto: disk → R2 | ✅ Kode selesai (14 Okt 2026): upload ke R2 `UPLOADS`, route GET `/uploads/[...path]`, skrip `uploads:r2` untuk foto lama; teruji di R2 lokal. ⏳ Pemilik: `wrangler r2 bucket create rasa-medan-uploads`. Rincian 27a |
 | 25 | Migrasi data & seed | ✅ Kode selesai (14 Okt 2026): `db:export` (MySQL → SQL D1), `db:import` (precheck + verifikasi), `db/seed/dummy-products.sql`; teruji dengan MariaDB sungguhan (zona waktu +07:00). ⏳ Ekspor/impor production dijalankan saat cutover (Skill 30). Rincian 25a |
 | 29 | Environment, config & build CI | 🟡 Dokumen & kode selesai (14 Okt 2026), AC belum tuntas sampai pemilik merotasi `ADMIN_SESSION_SECRET` (21.2 no. 1): `DEPLOYMENT.md` Cloudflare (versi cPanel diarsip), `.env.example` baru, checklist 21.3 Cloudflare, deploy guard + peringatan WA dummy. ⏳ Pemilik: rotasi secret via `wrangler secret put`, deploy uji workers.dev, (opsional) Workers Builds. Rincian 29a |
-| 30 | Cutover & pensiun cPanel (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
+| 30 | Cutover & pensiun cPanel (BAGIAN E) | 🟡 Runbook lengkap di `DEPLOYMENT.md` §11 (14 Okt 2026): persiapan DNS/email, gladi data, latihan domain, hari H berurutan, rollback, penguncian H+2, arsip H+30. ⏳ Eksekusi oleh pemilik (butuh akun Cloudflare & cPanel) |
 
 ---
 
@@ -612,6 +612,8 @@ Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal a
 - [ ] **Selama cPanel masih live:** `ADMIN_SESSION_SECRET` di panel Node.js App cPanel sudah diganti nilai acak baru + Restart, password admin cPanel diganti (nilai lama bocor di riwayat git dan masih diterima kode lama)
 - [ ] `ADMIN_SESSION_SECRET` via `wrangler secret put`, ≥32 karakter acak, belum pernah ter-commit, berbeda dari dev; tidak ada rahasia di `vars`/Build variables (guard menolak nama berbau rahasia di `vars`)
 - [ ] Akun Cloudflare: 2FA aktif, anggota & token API minimal (token Workers Builds ditinjau); token R2 S3 API tidak dibuat atau sudah dicabut
+- [ ] Akun registrar domain: 2FA aktif, *registrar/transfer lock* aktif; email pemulihan akun Cloudflare & registrar bukan alamat `@rasamedan.com` yang di-host di cPanel
+- [ ] *(Diisi di Fase F4 — bukan gerbang C0)* Tidak ada record DNS yatim yang menunjuk IP server cPanel setelah hosting dihentikan (DEPLOYMENT §11.5/§11.6)
 - [ ] `TURNSTILE_SECRET_KEY` via `wrangler secret put` + `TURNSTILE_SITE_KEY` di `vars` `wrangler.jsonc`, bukan test key; hostname widget = domain production (+ workers.dev bila staging); `ALLOW_TEST_CAPTCHA` TIDAK ada di `vars` maupun `npx wrangler secret list`; `vars.TRUST_CF_CONNECTING_IP` = "1" (guard memeriksa); login, cek pesanan, checkout diuji di URL deploy
 - [ ] `NEXT_PUBLIC_SITE_URL` = domain https asli **saat build** (`npm run deploy` otomatis menolak localhost/http/site key kosong lewat `scripts/check-deploy-env.mjs`); `npm run cf:build` menampilkan `[strip-bundle-secrets] OK`
 - [ ] Resource Cloudflare: `database_id` D1 asli di `wrangler.jsonc` (deploy menolak placeholder); bucket R2 `rasa-medan-uploads` ada dan **privat** (r2.dev Disabled, tanpa custom domain); `public/uploads` kosong (deploy menolak)
