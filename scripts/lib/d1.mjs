@@ -57,6 +57,11 @@ export function d1ExecSql(sqlText, target) {
   }
 }
 
+/** Jalankan file SQL yang sudah ada di disk apa adanya (tanpa salinan sementara). */
+export function d1ExecFile(path, target) {
+  return wrangler([target, "--file", path, "--yes"]);
+}
+
 /** Literal SQL aman untuk nilai string/angka/null (escape kutip tunggal). */
 export function sqlValue(v) {
   if (v === null || v === undefined) return "NULL";

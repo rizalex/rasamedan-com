@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { dbErrorMessage, placeholders, query } from "@/lib/db";
 import { verifyCaptcha } from "@/lib/turnstile";
 import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
-import { isValidPhone, normalizePhone } from "@/lib/phone";
+import { isValidPhone, normalizePhone } from "@/lib/phone.mjs";
 import { consumeRateLimit, refundRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";

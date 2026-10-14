@@ -11,7 +11,7 @@ import {
 import type { CheckoutItem, FulfillmentMethod } from "@/lib/orders";
 import { verifyCaptcha } from "@/lib/turnstile";
 import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
-import { isValidPhone, normalizePhone } from "@/lib/phone";
+import { isValidPhone, normalizePhone } from "@/lib/phone.mjs";
 import {
   checkRateLimit,
   consumeRateLimit,

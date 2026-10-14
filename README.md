@@ -99,6 +99,10 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=<kuat> npm run seed:admin
 npm run dev            # http://localhost:3000 (next dev memakai D1 lokal yang sama)
 ```
 
+Seed alternatif tanpa Node: `npx wrangler d1 execute rasamedan --local --file db/seed/dummy-products.sql` (dibangkitkan `npm run seed:sql`; hanya mengganti produk dummy, aman diulang; otomatis gagal tanpa menghapus apa pun bila D1 berisi produk non-dummy).
+
+**Migrasi data cPanel → D1 (Skill 25):** `npm i --no-save mysql2` → buka SSH tunnel ke cPanel (`ssh -L 3307:localhost:3306 …`) → `npm run db:export` (kredensial `DB_*` di `.env` dengan `DB_HOST=127.0.0.1`, `DB_PORT=3307`; hasil di `db-export/` — berisi data pribadi, di-gitignore) → `npm run db:import -- --file db-export/<file>.sql [--remote]` (menolak D1 yang sudah berisi; verifikasi jumlah baris, order_code unik, FK). Admin tidak ikut dimigrasi — buat ulang dengan `seed:admin`.
+
 Semua perintah DB menuju D1 **lokal** secara default; target production wajib eksplisit: `npm run db:migrate:remote`, `npm run seed:admin -- --remote`. Reset DB lokal: hapus folder `.wrangler/state` lalu ulangi `db:migrate`.
 
 Cek runtime Workers lokal: `npm run preview` (http://localhost:8787, memakai D1 + R2 lokal + `.dev.vars`).

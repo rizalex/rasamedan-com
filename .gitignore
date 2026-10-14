@@ -40,3 +40,6 @@ Thumbs.db
 
 # Pengaturan lokal Claude Code per mesin (izin pribadi) — jangan di-commit
 .claude/settings.local.json
+
+# Ekspor data production (Skill 25) — berisi data pribadi pelanggan
+/db-export/
