@@ -28,8 +28,8 @@ export default function AccountSettingsForm({
       return;
     }
     // Validasi ringan di client (server tetap validasi ulang).
-    if (newPassword && newPassword.length < 8) {
-      setError("Password baru minimal 8 karakter.");
+    if (newPassword && newPassword.length < 12) {
+      setError("Password baru minimal 12 karakter.");
       return;
     }
     if (newPassword && newPassword !== confirmPassword) {
@@ -106,7 +106,7 @@ export default function AccountSettingsForm({
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           autoComplete="new-password"
-          minLength={8}
+          minLength={12}
         />
       </label>
 

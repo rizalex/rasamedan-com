@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { dbErrorMessage, query } from "@/lib/db";
+import { dbErrorMessage, execute, query } from "@/lib/db";
 import {
   assertAuthConfigured,
-  verifyPassword,
-  setAdminCookie,
   clearAdminCookie,
+  hashPassword,
+  needsRehash,
+  setAdminCookie,
+  verifyLogin,
 } from "@/lib/auth";
+import { isSupportedHash } from "@/lib/password.mjs";
 import { verifyCaptcha } from "@/lib/turnstile";
 import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
 import {
@@ -48,7 +51,7 @@ export async function POST(req: Request) {
     );
   }
   // Batas panjang (username VARCHAR(50)) — cegah body raksasa membebani
-  // scrypt/DB atau memicu error DB yang berujung refund jatah.
+  // hashing/DB atau memicu error DB yang berujung refund jatah.
   if (username.length > 50 || password.length > 256) {
     return NextResponse.json(
       { error: "Username atau password salah" },
@@ -82,20 +85,41 @@ export async function POST(req: Request) {
   try {
     // Gagal di sini (500 seragam) bila secret salah konfigurasi — sebelum cek
     // password, agar password benar vs salah tidak bisa dibedakan.
-    assertAuthConfigured();
+    await assertAuthConfigured();
     const rows = await query<AdminRow>(
       "SELECT id, password_hash, session_version FROM admin_users WHERE username = ? LIMIT 1",
       [username]
     );
-    // Pesan error sama untuk username/password salah (hindari user enumeration).
-    if (rows.length === 0 || !verifyPassword(password, rows[0].password_hash)) {
+    const admin = rows[0] ?? null;
+    // Pesan error DAN biaya hashing sama untuk username/password salah
+    // (hindari user enumeration, termasuk lewat waktu respons).
+    if (!(await verifyLogin(password, admin?.password_hash ?? null))) {
+      if (admin && !isSupportedHash(admin.password_hash)) {
+        // Hash era cPanel (scrypt) tidak didukung lagi (Skill 26).
+        console.warn("[auth] Hash password admin berformat lama — reset: npm run seed:admin -- --reset");
+      }
       return NextResponse.json(
         { error: "Username atau password salah" },
         { status: 401 }
       );
     }
     resetRateLimit(rlKey);
-    await setAdminCookie(rows[0].id, Number(rows[0].session_version));
+    // Iterasi PBKDF2 dinaikkan sejak hash dibuat → perbarui diam-diam (password
+    // sama, session_version tidak berubah). Gagal di sini tidak membatalkan login.
+    // Compare-and-swap: hanya bila hash belum berubah sejak dibaca — login dengan
+    // password LAMA yang berpacu dengan ganti password tidak boleh mengembalikan
+    // password lama.
+    if (needsRehash(admin!.password_hash)) {
+      try {
+        await execute(
+          "UPDATE admin_users SET password_hash = ? WHERE id = ? AND password_hash = ?",
+          [await hashPassword(password), admin!.id, admin!.password_hash]
+        );
+      } catch (err) {
+        console.error("[auth] Gagal memperbarui hash password:", dbErrorMessage(err));
+      }
+    }
+    await setAdminCookie(admin!.id, Number(admin!.session_version));
     return NextResponse.json({ ok: true });
   } catch (err) {
     refundRateLimit(rlKey, rl.stamp);

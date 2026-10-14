@@ -42,7 +42,8 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 22 | Lacak pengiriman via api.co.id | 🆕 Rancangan; menunggu verifikasi 22.0 |
 | 23 | Setup runtime Cloudflare Workers | ✅ Kode selesai (OpenNext build + preview lokal lolos, bundle 1,4 MiB gzip, secret .env disaring dari bundle). Deploy uji ke workers.dev menunggu pemilik (`wrangler login`, rotasi secret, `NEXT_PUBLIC_SITE_URL`) |
 | 24 | Migrasi database MySQL → D1 | ✅ Kode selesai (14 Okt 2026): `migrations/0001_init.sql`, `lib/db.ts` D1, semua route via `batch()`/`queryIn`, `mysql2` dihapus; E2E 54 skenario (termasuk checkout 50 baris) lolos di `next dev` + preview workerd (D1 lokal). ⏳ Pemilik: `wrangler d1 create rasamedan` + isi `database_id` (deploy diblokir sampai diisi) |
-| 25–30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
+| 26 | Rewrite auth untuk Workers | ✅ Kode selesai (14 Okt 2026): PBKDF2-SHA256 Web Crypto (30.000 iterasi, terukur ±5 ms) + HMAC `crypto.subtle`, auth async penuh, `seed:admin` PBKDF2; hash scrypt lama ditolak (reset admin). Rincian 26a |
+| 25, 27–30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
 
 ---
 
@@ -310,7 +311,7 @@ CREATE TABLE categories (
 
 ### 15.3 Hardening yang sudah ada (pertahankan)
 - Rate limit 5 kegagalan / 15 menit per IP (`lib/rate-limit.ts`).
-- Password admin di-hash dengan scrypt (`lib/auth.ts`).
+- Password admin di-hash dengan scrypt (`lib/auth.ts`). *(Sejak Skill 26: PBKDF2-SHA256 via Web Crypto, `lib/password.mjs`.)*
 - Cookie sesi `httpOnly`, `secure` di production, `sameSite=strict`.
 - HTTPS wajib di production (lihat `DEPLOYMENT.md`).
 
@@ -342,14 +343,14 @@ CREATE TABLE categories (
 
 **Logika Backend:**
 1. Ambil data admin yang sedang login dari session.
-2. Cocokkan **password saat ini** yang diinput dengan hash password di database (`verifyPassword` di `lib/auth.ts`, scrypt) — jika tidak cocok, tolak seluruh perubahan dan tampilkan error, JANGAN proses field lain.
+2. Cocokkan **password saat ini** yang diinput dengan hash password di database (`verifyPassword`, PBKDF2 sejak Skill 26) — jika tidak cocok, tolak seluruh perubahan dan tampilkan error, JANGAN proses field lain.
 3. Jika password saat ini valid:
    - Jika username baru diisi & berbeda dari yang lama → validasi belum dipakai admin lain (kalau nanti ada multi-admin) → update.
-   - Jika password baru diisi → validasi sama dengan konfirmasi → hash dengan `hashPassword` (scrypt) → update.
+   - Jika password baru diisi → validasi sama dengan konfirmasi → hash dengan `hashPassword` (PBKDF2 sejak Skill 26) → update.
 4. Setelah berhasil ubah password, **invalidasi session yang sedang aktif** dan minta admin login ulang dengan kredensial baru (langkah keamanan supaya sesi lama tidak terus valid).
 
 **Validasi Tambahan:**
-- Panjang password baru minimal 8 karakter (silakan sesuaikan kebijakan).
+- Panjang password baru minimal 12 karakter (semula 8; dinaikkan di Skill 26 sebagai kompensasi iterasi PBKDF2).
 - Tampilkan pesan sukses/gagal yang jelas, tapi jangan bocorkan info spesifik (misal jangan bedakan pesan error antara "username salah" vs "password salah" pada proses verifikasi password saat ini — cukup "Password saat ini salah").
 
 **Acceptance Criteria:**
@@ -600,7 +601,7 @@ transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-
 | 9 | ✅ `_tmp_dbtest.mjs` dihapus (Skill 20); `.claude/settings.local.json` di-ignore & keluar dari git |
 | 10 | ✅ Kode: `seed:admin` wajib `ADMIN_PASSWORD` ≥ 12. ⏳ **Pemilik:** ganti password akun lama bila masih default |
 
-Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal antar-isolate Workers → tabel D1 (Skill 28); hashing scrypt → PBKDF2 (Skill 26); upload ke R2 (Skill 27).
+Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal antar-isolate Workers → tabel D1 (Skill 28); hashing scrypt → PBKDF2 (Skill 26, selesai); upload ke R2 (Skill 27).
 
 ### 21.3 Checklist pre-deploy Cloudflare Workers (isi setiap kali deploy)
 - [ ] Audit penuh `security-auditor`: tidak ada temuan Kritis/Tinggi yang masih terbuka
@@ -821,6 +822,19 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ---
 
+### 26a — Catatan pelaksanaan (14 Okt 2026)
+
+- **`lib/password.mjs`** (JS murni Web Crypto, dipakai aplikasi DAN `scripts/seed-admin.mjs` — satu sumber format): PBKDF2-SHA256, salt 16 byte, hash 32 byte, format `pbkdf2:<iter>:<saltHex>:<hashHex>`, perbandingan XOR waktu-konstan. Iterasi tersimpan di hash; iterasi di luar 1–100.000 (batas PBKDF2 Workers) atau format lain ditolak.
+- **Iterasi = 30.000**, bukan 100.000: terukur ±5,4 ms vs ±16 ms per hash (melewati 10 ms CPU Free). Kompensasi: Turnstile + rate limit login, password baru minimal **12** karakter (halaman Pengaturan, semula 8; sama dengan `seed:admin`). Bila pindah paket berbayar, naikkan `PBKDF2_ITERATIONS` — hash lama di-upgrade otomatis saat login (`needsRehash`, tanpa menaikkan `session_version`). Catatan: login yang memicu upgrade menjalankan PBKDF2 dua kali (±2× CPU) — sekali per admin per kenaikan iterasi; naikkan iterasi bersamaan dengan pindah ke paket berbayar.
+- **`lib/auth.ts`** async penuh tanpa `node:crypto`: token `payload.sig` base64url, HMAC-SHA256 `crypto.subtle.sign/verify` (verify waktu-konstan), CryptoKey di-cache per nilai secret (dibuat lazy di request); token >1 KB / bagian ekstra ditolak; secret tidak valid di production → `getAdminSession` null dan login 500 (fail-closed).
+- **Anti-enumerasi timing:** username tak dikenal tetap menjalankan PBKDF2 terhadap hash dummy (`verifyLogin`) — terukur ±28 ms keduanya (menutup catatan audit Skill 24). Berlaku juga untuk akun dengan hash tak dikenali (scrypt lama) — tetap di-hash dummy.
+- **Hash scrypt era cPanel ditolak** (tanpa fallback scrypt): login gagal + log petunjuk `npm run seed:admin -- --reset`. Konsekuensi untuk Skill 25/30: password admin dibuat ulang saat cutover (sudah direncanakan di Skill 25 langkah 5).
+- **Teruji:** unit test format/verify/salah/salt unik/hash lama/iterasi tak wajar/upgrade; 6 jenis token palsu ditolak; upgrade hash 1.000 → 30.000 saat login tanpa memutus sesi; password baru 11 karakter ditolak; E2E 54 skenario lolos di `next dev` dan preview workerd; preview dengan secret pendek → login 500.
+- **Dari audit:** upgrade hash saat login memakai compare-and-swap (`WHERE password_hash = <hash yang dibaca>`) agar login dengan password lama tidak bisa menimpa password yang baru diganti; iterasi di hash wajib angka desimal 1–6 digit; tebakan "password saat ini" di Pengaturan dibatasi 5 salah / 15 menit per akun (in-memory seperti login — pindah ke D1 di Skill 28).
+- **Wajib diuji di workers.dev (Skill 29/30):** ganti password = 2× PBKDF2 (±10 ms CPU, pas di batas Free); bila sering "Exceeded CPU", turunkan iterasi sedikit (mis. 25.000) atau terima dan catat. Risiko diterima: bila isi D1 bocor, cracking offline lebih murah dari rekomendasi OWASP (600k) — pertahanannya password admin ≥12 karakter acak.
+- `package.json` `engines.node >=20` (`crypto` global dipakai `lib/password.mjs` di skrip Node).
+- Sisa `node:crypto`: hanya `randomBytes` untuk nama file di `app/api/admin/upload/route.ts` (murah; route ini ditulis ulang di Skill 27).
+
 ## Skill 27 — Upload Foto: Disk → R2
 
 > **Sudah dikerjakan di Skill 21:** validasi magic bytes (`lib/image-type.ts`, portabel). Sisa skill ini: penyimpanan R2 + route GET `/uploads/[...path]`.
@@ -847,7 +861,7 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ## Skill 28 — Turnstile & Rate Limit di D1
 
-> **Sudah dikerjakan di Skill 21:** langkah 1, 2, dan 4 (Turnstile di login, cek pesanan, checkout; batas input/item; rate limit checkout). Sisa skill ini: langkah 3 — rate limit pindah dari memori ke tabel D1 `login_failures`.
+> **Sudah dikerjakan di Skill 21:** langkah 1, 2, dan 4 (Turnstile di login, cek pesanan, checkout; batas input/item; rate limit checkout). Sisa skill ini: langkah 3 — rate limit pindah dari memori ke tabel D1 `login_failures`. Kunci yang wajib ikut dipindah: `login:*`, `checkorder:*`, `order:*`, `ordercaptcha:*`, dan `account:*` (tebakan password saat ini di Pengaturan, Skill 26).
 
 **Tujuan:** Menutup backlog Skill 15 (kode masih reCAPTCHA) dan menyelesaikan hardening checkout (Skill 21.2 no. 3) di atas infrastruktur Cloudflare.
 

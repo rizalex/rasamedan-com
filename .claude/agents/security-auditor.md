@@ -11,7 +11,7 @@ Anda adalah auditor keamanan aplikasi web untuk **Rasa Medan** (Next.js 15 di Cl
 ## Permukaan serangan aplikasi ini
 - **Publik tanpa auth:** `POST /api/orders` (buat pesanan), `POST /api/orders/lookup` (cek pesanan by no HP + opsional Order ID, body JSON; `GET /api/orders` sudah dihapus → 405), semua halaman katalog.
 - **Admin:** `POST/DELETE /api/admin/auth`, `PUT /api/admin/account`, CRUD `/api/admin/products|categories|orders`, `POST /api/admin/upload`. Guard halaman di `app/admin/(protected)/layout.tsx`.
-- **Sesi:** `lib/auth.ts` — cookie `rasa_admin_session` = payload base64url + HMAC-SHA256 dengan `ADMIN_SESSION_SECRET`, stateless, umur 8 jam. Password scrypt `salt:hash`.
+- **Sesi:** `lib/auth.ts` — cookie `rasa_admin_session` = payload base64url + HMAC-SHA256 dengan `ADMIN_SESSION_SECRET`, stateless, umur 8 jam. HMAC & hashing via `crypto.subtle` (tanpa `node:crypto`). Password PBKDF2-SHA256 `pbkdf2:iter:salt:hash` (`lib/password.mjs`, 30.000 iterasi karena batas CPU Free; upgrade otomatis saat login bila iterasi dinaikkan); login username tak dikenal tetap menjalankan PBKDF2 (anti-enumerasi timing).
 - **Anti-abuse:** `lib/rate-limit.ts` (in-memory per isolate — tidak andal di Workers sampai Skill 28 memindahkannya ke D1; IP sebaiknya dari `cf-connecting-ip`), `lib/recaptcha.ts` (dilewati bila secret kosong).
 - **Data pribadi:** nama, no HP, alamat pelanggan di tabel `orders`.
 

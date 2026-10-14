@@ -31,7 +31,7 @@ Aturan kritis: tanpa akun pelanggan, tanpa payment gateway, tanpa hitung ongkir 
 | Framework | Next.js 15 (App Router) + React 19, TypeScript |
 | Styling | CSS murni / CSS Modules, mobile-first, CSS variables |
 | DB | Cloudflare D1 (SQLite) via binding `DB` (`lib/db.ts`: `query`/`queryIn`/`execute`/`batch`), parameterized query; skema di `migrations/` |
-| Auth admin | Session cookie HttpOnly ber-HMAC-SHA256 (`lib/auth.ts`, `node:crypto` scrypt, 8 jam), sesi dicabut via `session_version` saat ganti password; Cloudflare Turnstile (login, cek pesanan, checkout; fail-closed di production) + rate-limit 5 gagal/15 mnt; header keamanan + CSP (`next.config.mjs`) |
+| Auth admin | Session cookie HttpOnly ber-HMAC-SHA256 (`lib/auth.ts`, Web Crypto `crypto.subtle`, 8 jam); password PBKDF2-SHA256 30.000 iterasi (`lib/password.mjs`, min. 12 karakter), sesi dicabut via `session_version` saat ganti password; Cloudflare Turnstile (login, cek pesanan, checkout; fail-closed di production) + rate-limit 5 gagal/15 mnt; header keamanan + CSP (`next.config.mjs`) |
 | i18n | `I18nProvider` + `locales/id.json`, `locales/en.json` (default `id`; nama/deskripsi produk tetap id) |
 | WA | `lib/whatsapp.ts` → `https://wa.me/<nomor>?text=<encoded>` |
 | SEO | `lib/seo.ts` (canonical, OG/Twitter, hreflang id/en, JSON-LD Product/LocalBusiness/Breadcrumb), `app/sitemap.ts`, `app/robots.ts` |
@@ -86,7 +86,7 @@ Catatan D1: waktu disimpan sebagai teks ISO-8601 UTC (ditampilkan WIB); kolom us
 - `orders`: `order_code` unik, `phone` terindeks, `fulfillment_method` (`kurir|pickup`), `status` CHECK 9 nilai baku, `total_estimate` (tanpa ongkir); order + items disimpan atomik dalam satu `batch()`
 - `order_items`: snapshot `product_name` + `unit_price` saat pesan (tahan hapus produk), FK order cascade / produk set-null
 - `categories`: `slug` unik; hapus ditolak bila masih dipakai produk (cek level aplikasi)
-- `admin_users`: `username` unik, `password_hash` format `salt:hash` (scrypt)
+- `admin_users`: `username` unik, `password_hash` format `pbkdf2:iterasi:salt:hash` (hash scrypt lama ditolak — reset via `seed:admin -- --reset`)
 
 ## 5. Setup Lokal
 
