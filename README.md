@@ -31,7 +31,7 @@ Aturan kritis: tanpa akun pelanggan, tanpa payment gateway, tanpa hitung ongkir 
 | Framework | Next.js 15 (App Router) + React 19, TypeScript |
 | Styling | CSS murni / CSS Modules, mobile-first, CSS variables |
 | DB | Cloudflare D1 (SQLite) via binding `DB` (`lib/db.ts`: `query`/`queryIn`/`execute`/`batch`), parameterized query; skema di `migrations/` |
-| Auth admin | Session cookie HttpOnly ber-HMAC-SHA256 (`lib/auth.ts`, Web Crypto `crypto.subtle`, 8 jam); password PBKDF2-SHA256 30.000 iterasi (`lib/password.mjs`, min. 12 karakter), sesi dicabut via `session_version` saat ganti password; Cloudflare Turnstile (login, cek pesanan, checkout; fail-closed di production) + rate-limit 5 gagal/15 mnt; header keamanan + CSP (`next.config.mjs`) |
+| Auth admin | Session cookie HttpOnly ber-HMAC-SHA256 (`lib/auth.ts`, Web Crypto `crypto.subtle`, 8 jam); password PBKDF2-SHA256 30.000 iterasi (`lib/password.mjs`, min. 12 karakter), sesi dicabut via `session_version` saat ganti password; Cloudflare Turnstile (login, cek pesanan, checkout; fail-closed di production) + rate limit di tabel D1 `login_failures` (login 5 gagal/15 mnt, cek pesanan, checkout 10/jam, Pengaturan; tahan restart, atomik); header keamanan + CSP (`next.config.mjs`) |
 | i18n | `I18nProvider` + `locales/id.json`, `locales/en.json` (default `id`; nama/deskripsi produk tetap id) |
 | WA | `lib/whatsapp.ts` → `https://wa.me/<nomor>?text=<encoded>` |
 | SEO | `lib/seo.ts` (canonical, OG/Twitter, hreflang id/en, JSON-LD Product/LocalBusiness/Breadcrumb), `app/sitemap.ts`, `app/robots.ts` |
@@ -77,7 +77,7 @@ wrangler.jsonc · open-next.config.ts · cloudflare-env.d.ts · next.config.mjs 
 
 ## 4. Database (Cloudflare D1)
 
-`migrations/0001_init.sql` (dialek SQLite) membuat 6 tabel: `categories` (berisi Kue/Kering/Sirup), `products`, `product_variants`, `orders`, `order_items`, `admin_users` — plus `login_failures` (disiapkan untuk rate limit D1, Skill 28). Perubahan skema = file migrasi baru `migrations/NNNN_*.sql`; jangan mengedit migrasi yang sudah diterapkan.
+`migrations/0001_init.sql` (dialek SQLite) membuat 6 tabel: `categories` (berisi Kue/Kering/Sirup), `products`, `product_variants`, `orders`, `order_items`, `admin_users` — plus `login_failures` (rate limit, Skill 28). Perubahan skema = file migrasi baru `migrations/NNNN_*.sql`; jangan mengedit migrasi yang sudah diterapkan.
 
 Catatan D1: waktu disimpan sebagai teks ISO-8601 UTC (ditampilkan WIB); kolom username/slug/kategori/`order_code` memakai `COLLATE NOCASE` (tidak peka huruf besar/kecil, sama seperti MySQL dulu); maks 100 parameter per query (`queryIn` memecah `IN` panjang); transaksi = `batch()` (D1 tidak mendukung BEGIN/COMMIT).
 

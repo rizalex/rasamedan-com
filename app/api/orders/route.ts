@@ -108,11 +108,11 @@ export async function POST(req: Request) {
   const captchaKey = `ordercaptcha:${ipKey}`;
 
   // 1) Rate limit — tolak cepat sebelum kerja lain.
-  const orderRl = checkRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
+  const orderRl = await checkRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
   if (orderRl.limited) return tooManyOrders(orderRl.retryAfterSec);
-  // Jatah "captcha gagal" diambil atomik sebelum `await` (anti burst paralel),
+  // Jatah "captcha gagal" diambil atomik di D1 sebelum captcha (anti burst paralel),
   // lalu dikembalikan bila captcha lolos.
-  const captchaRl = consumeRateLimit(captchaKey, CAPTCHA_FAIL_LIMIT, ORDER_WINDOW_MS);
+  const captchaRl = await consumeRateLimit(captchaKey, CAPTCHA_FAIL_LIMIT, ORDER_WINDOW_MS);
   if (captchaRl.limited) return tooManyOrders(captchaRl.retryAfterSec);
 
   // 2) Verifikasi Turnstile SEBELUM kerja lain. Error dikirim sebagai kode agar
@@ -120,10 +120,10 @@ export async function POST(req: Request) {
   const captcha = await verifyCaptcha(captchaToken, ip, "checkout");
   if (!captcha.ok) {
     // 503 = salah konfigurasi server (bukan ulah klien) → jatah dikembalikan.
-    if (captcha.status === 503) refundRateLimit(captchaKey, captchaRl.stamp);
+    if (captcha.status === 503) await refundRateLimit(captchaKey, captchaRl.stamp);
     return NextResponse.json({ error: captcha.code, code: captcha.code }, { status: captcha.status });
   }
-  refundRateLimit(captchaKey, captchaRl.stamp);
+  await refundRateLimit(captchaKey, captchaRl.stamp);
 
   // --- Validasi ---
   // Batas panjang input (anti penyalahgunaan; selaras batas kolom DB).
@@ -187,12 +187,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3) Ambil satu jatah kuota secara atomik (cek + catat tanpa `await` di
-  // antaranya, agar burst paralel tidak lolos). Salah isi form sudah ditolak di
+  // 3) Ambil satu jatah kuota secara atomik (cek + catat dalam satu INSERT
+  // bersyarat di D1, agar burst paralel tidak lolos). Salah isi form sudah ditolak di
   // atas tanpa memotong kuota; di sini jatah hanya dikembalikan untuk error
   // server (catch), bukan untuk produk/varian tidak valid — agar request itu
   // tidak bisa membebani DB tanpa batas.
-  const quota = consumeRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
+  const quota = await consumeRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
   if (quota.limited) return tooManyOrders(quota.retryAfterSec);
 
   try {
@@ -382,7 +382,7 @@ export async function POST(req: Request) {
       total_weight: totalWeight,
     });
   } catch (err) {
-    refundRateLimit(orderKey, quota.stamp);
+    await refundRateLimit(orderKey, quota.stamp);
     // Log ringkas (pesan singkat), bukan objek error utuh yang bisa memuat PII.
     console.error("POST /api/orders gagal:", dbErrorMessage(err));
     return NextResponse.json(

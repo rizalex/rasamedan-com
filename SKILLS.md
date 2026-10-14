@@ -32,7 +32,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 1–12 | MVP: setup & DB, dummy, beranda, katalog, detail, cart, checkout+WA, cek pesanan, admin, i18n, halaman pendukung, deploy | ✅ Selesai |
 | 13 | Berat produk & info ongkir manual | ✅ Selesai — berat per varian kini bisa diisi dari admin (Skill 20.4) |
 | 14 | Kategori dinamis | ✅ Selesai |
-| 15 | Captcha (Turnstile) & hardening login | ✅ Turnstile di login, cek pesanan, checkout (Skill 21); fail-closed di production. AC "diuji di server" diganti: diuji di Workers saat deploy (21.3) |
+| 15 | Captcha (Turnstile) & hardening login | ✅ Turnstile di login, cek pesanan, checkout (Skill 21); fail-closed di production; rate limit di D1, tahan restart (Skill 28). AC "diuji di server" diganti: diuji di Workers saat deploy (21.3) |
 | 16 | Pengaturan akun admin | ✅ Ganti password mencabut sesi di semua perangkat (`session_version`, Skill 21) |
 | 17 | Redesign visual | ✅ Palet diterapkan; kesesuaian dengan mockup belum diverifikasi di browser |
 | 18 | Lokasi toko & info kontak | ✅ Selesai |
@@ -43,7 +43,8 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 23 | Setup runtime Cloudflare Workers | ✅ Kode selesai (OpenNext build + preview lokal lolos, bundle 1,4 MiB gzip, secret .env disaring dari bundle). Deploy uji ke workers.dev menunggu pemilik (`wrangler login`, rotasi secret, `NEXT_PUBLIC_SITE_URL`) |
 | 24 | Migrasi database MySQL → D1 | ✅ Kode selesai (14 Okt 2026): `migrations/0001_init.sql`, `lib/db.ts` D1, semua route via `batch()`/`queryIn`, `mysql2` dihapus; E2E 54 skenario (termasuk checkout 50 baris) lolos di `next dev` + preview workerd (D1 lokal). ⏳ Pemilik: `wrangler d1 create rasamedan` + isi `database_id` (deploy diblokir sampai diisi) |
 | 26 | Rewrite auth untuk Workers | ✅ Kode selesai (14 Okt 2026): PBKDF2-SHA256 Web Crypto (30.000 iterasi, terukur ±5 ms) + HMAC `crypto.subtle`, auth async penuh, `seed:admin` PBKDF2; hash scrypt lama ditolak (reset admin). Rincian 26a |
-| 25, 27–30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
+| 28 | Turnstile & rate limit di D1 | ✅ Kode selesai (14 Okt 2026): `lib/rate-limit.ts` di tabel D1 `login_failures` (atomik, tahan restart, lintas isolate) untuk login, cek pesanan, checkout, Pengaturan. Turnstile sudah sejak Skill 21. Rincian 28a |
+| 25, 27, 29, 30 | Migrasi cPanel → Cloudflare Workers (BAGIAN E) | 🆕 Direncanakan 13 Okt 2026 (keputusan: D1, R2, Turnstile, Workers Free). Dikerjakan sebelum Skill 22 |
 
 ---
 
@@ -601,7 +602,7 @@ transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-
 | 9 | ✅ `_tmp_dbtest.mjs` dihapus (Skill 20); `.claude/settings.local.json` di-ignore & keluar dari git |
 | 10 | ✅ Kode: `seed:admin` wajib `ADMIN_PASSWORD` ≥ 12. ⏳ **Pemilik:** ganti password akun lama bila masih default |
 
-Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal antar-isolate Workers → tabel D1 (Skill 28); hashing scrypt → PBKDF2 (Skill 26, selesai); upload ke R2 (Skill 27).
+Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal antar-isolate Workers → tabel D1 (Skill 28, selesai); hashing scrypt → PBKDF2 (Skill 26, selesai); upload ke R2 (Skill 27).
 
 ### 21.3 Checklist pre-deploy Cloudflare Workers (isi setiap kali deploy)
 - [ ] Audit penuh `security-auditor`: tidak ada temuan Kritis/Tinggi yang masih terbuka
@@ -830,7 +831,7 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 - **Anti-enumerasi timing:** username tak dikenal tetap menjalankan PBKDF2 terhadap hash dummy (`verifyLogin`) — terukur ±28 ms keduanya (menutup catatan audit Skill 24). Berlaku juga untuk akun dengan hash tak dikenali (scrypt lama) — tetap di-hash dummy.
 - **Hash scrypt era cPanel ditolak** (tanpa fallback scrypt): login gagal + log petunjuk `npm run seed:admin -- --reset`. Konsekuensi untuk Skill 25/30: password admin dibuat ulang saat cutover (sudah direncanakan di Skill 25 langkah 5).
 - **Teruji:** unit test format/verify/salah/salt unik/hash lama/iterasi tak wajar/upgrade; 6 jenis token palsu ditolak; upgrade hash 1.000 → 30.000 saat login tanpa memutus sesi; password baru 11 karakter ditolak; E2E 54 skenario lolos di `next dev` dan preview workerd; preview dengan secret pendek → login 500.
-- **Dari audit:** upgrade hash saat login memakai compare-and-swap (`WHERE password_hash = <hash yang dibaca>`) agar login dengan password lama tidak bisa menimpa password yang baru diganti; iterasi di hash wajib angka desimal 1–6 digit; tebakan "password saat ini" di Pengaturan dibatasi 5 salah / 15 menit per akun (in-memory seperti login — pindah ke D1 di Skill 28).
+- **Dari audit:** upgrade hash saat login memakai compare-and-swap (`WHERE password_hash = <hash yang dibaca>`) agar login dengan password lama tidak bisa menimpa password yang baru diganti; iterasi di hash wajib angka desimal 1–6 digit; tebakan "password saat ini" di Pengaturan dibatasi 5 salah / 15 menit per akun (sejak Skill 28 tersimpan di D1 seperti login).
 - **Wajib diuji di workers.dev (Skill 29/30):** ganti password = 2× PBKDF2 (±10 ms CPU, pas di batas Free); bila sering "Exceeded CPU", turunkan iterasi sedikit (mis. 25.000) atau terima dan catat. Risiko diterima: bila isi D1 bocor, cracking offline lebih murah dari rekomendasi OWASP (600k) — pertahanannya password admin ≥12 karakter acak.
 - `package.json` `engines.node >=20` (`crypto` global dipakai `lib/password.mjs` di skrip Node).
 - Sisa `node:crypto`: hanya `randomBytes` untuk nama file di `app/api/admin/upload/route.ts` (murah; route ini ditulis ulang di Skill 27).
@@ -861,7 +862,7 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ## Skill 28 — Turnstile & Rate Limit di D1
 
-> **Sudah dikerjakan di Skill 21:** langkah 1, 2, dan 4 (Turnstile di login, cek pesanan, checkout; batas input/item; rate limit checkout). Sisa skill ini: langkah 3 — rate limit pindah dari memori ke tabel D1 `login_failures`. Kunci yang wajib ikut dipindah: `login:*`, `checkorder:*`, `order:*`, `ordercaptcha:*`, dan `account:*` (tebakan password saat ini di Pengaturan, Skill 26).
+> **Sudah dikerjakan di Skill 21:** langkah 1, 2, dan 4 (Turnstile di login, cek pesanan, checkout; batas input/item; rate limit checkout). Sisa skill ini: langkah 3 — rate limit pindah dari memori ke tabel D1 `login_failures`. Kunci yang wajib ikut dipindah: `login:*`, `checkorder:*`, `order:*`, `ordercaptcha:*`, dan `account:*` (tebakan password saat ini di Pengaturan, Skill 26; per akun + IP).
 
 **Tujuan:** Menutup backlog Skill 15 (kode masih reCAPTCHA) dan menyelesaikan hardening checkout (Skill 21.2 no. 3) di atas infrastruktur Cloudflare.
 
@@ -884,6 +885,17 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ---
 
+### 28a — Catatan pelaksanaan (14 Okt 2026)
+
+- **`lib/rate-limit.ts`** ditulis ulang di atas tabel `login_failures(bucket, ts)` (dari `0001_init.sql`); API tetap (`checkRateLimit`, `consumeRateLimit` → `{limited, retryAfterSec, stamp}`, `refundRateLimit`, `resetRateLimit`), kini async. `recordFailure` (tak terpakai) dihapus.
+- **Atomik tanpa transaksi eksplisit:** `consume` = batch [hapus catatan kunci itu yang keluar jendela, `INSERT … SELECT … WHERE (SELECT COUNT(*) …) < max`]. D1 menjalankan statement tulis satu per satu, jadi burst paralel tidak bisa melewati batas. `stamp` = `"<rowid>:<ts>"` → refund menghapus tepat satu baris (`rowid` + `bucket` + `ts` harus cocok; rowid bisa dipakai ulang karena tabel tanpa AUTOINCREMENT). D1 error saat check di checkout tampil sebagai 429 "terlalu banyak pesanan" (fail-closed; pesan kurang tepat tapi diterima). Komentar `0001_init.sql` yang menyebut "masih in-memory" sengaja tidak diubah (migrasi sudah diterapkan).
+- **Kebersihan tabel:** catatan kunci yang dipakai dipangkas setiap consume; 2% consume juga menghapus maks 500 catatan > 24 jam milik semua kunci (IP yang tidak kembali), memakai index `(ts)` dari `migrations/0002_login_failures_ts.sql` — tanpa index itu sweep memindai seluruh tabel dan penyerang dengan banyak IP bisa menghabiskan kuota rows read D1 Free (temuan Sedang audit). Sweep di-await (Workers bisa memutus promise yang belum selesai).
+- **Kuota D1 (wajib saat deploy, tugas pemilik):** setiap percobaan login/cek pesanan/checkout menulis 1 catatan sebelum captcha diperiksa, jadi banjir request dari banyak IP tetap memakan kuota tulis D1 Free (100 rb baris/hari). Pasang **1 aturan WAF Rate Limiting** (gratis) di dashboard Cloudflare untuk `/api/admin/auth`, `/api/orders`, `/api/orders/lookup` agar banjir diblok di edge sebelum Worker/D1, dan aktifkan notifikasi penggunaan Workers/D1. Masuk checklist Skill 29/30.
+- **Gagal tertutup:** D1 error saat check/consume → dianggap terkunci (retry 60 dtk); refund/reset gagal → hanya log. Operasi yang dilindungi juga butuh D1, jadi tidak ada fungsi yang hilang.
+- **Kunci:** `login:<ip>`, `checkorder:<ip>`, `order:<ip>` (10/jam), `ordercaptcha:<ip>` (30/jam), `account:<adminId>:<ip>` (per akun DAN jaringan: pencuri cookie tidak bisa mengunci admin asli dari ganti password — satu-satunya cara di UI mencabut sesi curian; jalur darurat: `npm run seed:admin -- --remote --reset`). Trade-off yang disengaja: pemegang cookie curian dengan banyak IP bisa menebak password saat ini lebih dari 5×/15 mnt; batas global per akun tidak dipakai karena justru mengembalikan celah penguncian admin asli. Risiko kecil: butuh cookie sesi valid, dan password admin ≥12 karakter. **Backlog:** wajibkan Turnstile di `PUT /api/admin/account` (pakai `CaptchaWidget` di `AccountSettingsForm`, seperti login) agar tebakan multi-IP tetap butuh captcha per percobaan; IP v6 dikelompokkan per /64 (`lib/client-ip.ts`).
+- **Biaya query:** +1–3 query per request terlindungi (checkout total ±12, jauh di bawah 50/invocation Free).
+- **Teruji:** E2E 54 skenario di `next dev` + preview workerd; burst 20 login salah paralel → tepat 5 tercatat, 15 ditolak 429 (dua runtime); kunci tetap berlaku setelah server di-restart (429 meski password benar); `grep -ri recaptcha` di kode kosong.
+
 ## Skill 29 — Environment, Config & Build CI
 
 **Tujuan:** Konfigurasi production rapi (vars vs secrets), deploy otomatis dari GitHub, dan dokumentasi deploy akurat — menutup temuan Skill 21.2 no. 1.
@@ -897,6 +909,7 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 5. Tulis ulang `DEPLOYMENT.md` untuk Cloudflare; pindahkan versi cPanel ke `docs/legacy/DEPLOYMENT-cpanel.md`.
 6. Update `README.md` §2 (tech stack) dan §8 (deploy) sesuai kondisi baru.
 7. Sesuaikan checklist Skill 21.3 untuk Cloudflare (SSL otomatis, uploads di R2, tanpa `.htaccess`).
+8. **Pemilik:** pasang 1 aturan WAF Rate Limiting (paket Free) untuk `/api/admin/auth`, `/api/orders`, `/api/orders/lookup`, dan notifikasi penggunaan Workers/D1 — melindungi kuota harian D1 dari banjir request multi-IP (catatan 28a).
 
 **Acceptance Criteria:**
 

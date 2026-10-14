@@ -7,6 +7,7 @@ import {
   clearAdminCookie,
 } from "@/lib/auth";
 import { consumeRateLimit, refundRateLimit, resetRateLimit } from "@/lib/rate-limit";
+import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
 
 export const dynamic = "force-dynamic";
 
@@ -67,9 +68,11 @@ export async function PUT(req: Request) {
   }
 
   // Batasi tebakan "password saat ini" (mis. pemegang cookie curian yang ingin
-  // mengetahui password admin): 5 salah / 15 menit per akun, sama dengan login.
-  const rlKey = `account:${session.sub}`;
-  const rl = consumeRateLimit(rlKey);
+  // mengetahui password admin): 5 salah / 15 menit per akun PER JARINGAN, sama
+  // dengan login. IP ikut di kunci agar pencuri cookie tidak bisa mengunci admin
+  // asli dari ganti password (satu-satunya cara di UI mencabut sesi curian).
+  const rlKey = `account:${session.sub}:${rateLimitKeyFromIp(getClientIp(req))}`;
+  const rl = await consumeRateLimit(rlKey);
   if (rl.limited) {
     const mins = Math.ceil(rl.retryAfterSec / 60);
     return NextResponse.json(
@@ -97,7 +100,7 @@ export async function PUT(req: Request) {
         { status: 401 }
       );
     }
-    resetRateLimit(rlKey);
+    await resetRateLimit(rlKey);
 
     // Kumpulkan perubahan (username &/atau password).
     const setClauses: string[] = [];
@@ -177,7 +180,7 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ ok: true, usernameChanged, passwordChanged });
   } catch (err) {
-    refundRateLimit(rlKey, rl.stamp);
+    await refundRateLimit(rlKey, rl.stamp);
     // Log ringkas: jangan log objek error utuh (parameter memuat hash password baru).
     console.error("PUT /api/admin/account gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });

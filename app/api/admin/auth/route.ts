@@ -60,10 +60,11 @@ export async function POST(req: Request) {
   }
 
   // 1) Rate limit — blokir brute force sebelum kerja lain. Jatah diambil atomik
-  // sebelum `await` apa pun agar burst paralel tidak lolos melewati batas 5.
+  // di D1 (INSERT bersyarat) sebelum kerja lain agar burst paralel tidak lolos
+  // melewati batas 5, juga lintas isolate Workers (Skill 28).
   // Captcha/password gagal → jatah tetap terpakai; sukses → reset; error server
   // → dikembalikan.
-  const rl = consumeRateLimit(rlKey);
+  const rl = await consumeRateLimit(rlKey);
   if (rl.limited) {
     const mins = Math.ceil(rl.retryAfterSec / 60);
     return NextResponse.json(
@@ -78,7 +79,7 @@ export async function POST(req: Request) {
   const captcha = await verifyCaptcha(captchaToken, ip, "login");
   if (!captcha.ok) {
     // 503 = salah konfigurasi server (bukan ulah klien) → jatah dikembalikan.
-    if (captcha.status === 503) refundRateLimit(rlKey, rl.stamp);
+    if (captcha.status === 503) await refundRateLimit(rlKey, rl.stamp);
     return NextResponse.json({ error: captcha.code, code: captcha.code }, { status: captcha.status });
   }
 
@@ -103,7 +104,7 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
-    resetRateLimit(rlKey);
+    await resetRateLimit(rlKey);
     // Iterasi PBKDF2 dinaikkan sejak hash dibuat → perbarui diam-diam (password
     // sama, session_version tidak berubah). Gagal di sini tidak membatalkan login.
     // Compare-and-swap: hanya bila hash belum berubah sejak dibaca — login dengan
@@ -122,7 +123,7 @@ export async function POST(req: Request) {
     await setAdminCookie(admin!.id, Number(admin!.session_version));
     return NextResponse.json({ ok: true });
   } catch (err) {
-    refundRateLimit(rlKey, rl.stamp);
+    await refundRateLimit(rlKey, rl.stamp);
     console.error("POST /api/admin/auth gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });
   }

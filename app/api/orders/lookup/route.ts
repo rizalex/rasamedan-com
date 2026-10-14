@@ -65,9 +65,9 @@ export async function POST(req: Request) {
   }
 
   // 1) Rate limit — cegah brute force enumerasi nomor HP / Order ID. Jatah
-  // diambil atomik di awal (sebelum `await` captcha) agar burst paralel tidak
+  // diambil atomik di D1 di awal (sebelum captcha) agar burst paralel tidak
   // lolos; dikembalikan bila pesanan ditemukan atau terjadi error server.
-  const rl = consumeRateLimit(rlKey);
+  const rl = await consumeRateLimit(rlKey);
   if (rl.limited) {
     const mins = Math.ceil(rl.retryAfterSec / 60);
     return NextResponse.json(
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
   const captcha = await verifyCaptcha(captchaToken, ip, "check-order");
   if (!captcha.ok) {
     // 503 = salah konfigurasi server (bukan ulah klien) → jatah dikembalikan.
-    if (captcha.status === 503) refundRateLimit(rlKey, rl.stamp);
+    if (captcha.status === 503) await refundRateLimit(rlKey, rl.stamp);
     return NextResponse.json({ error: captcha.code, code: captcha.code }, { status: captcha.status });
   }
 
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
     // Pencarian valid → kembalikan jatah pencarian ini saja (bukan reset), agar
     // tebakan gagal sebelumnya tetap terhitung — mencegah bypass dengan menyelipkan
     // pencarian nomor sendiri di antara tebakan nomor orang lain.
-    refundRateLimit(rlKey, rl.stamp);
+    await refundRateLimit(rlKey, rl.stamp);
     refunded = true;
 
     const ids = orders.map((o) => o.id);
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ orders: result });
   } catch (err) {
-    if (!refunded) refundRateLimit(rlKey, rl.stamp);
+    if (!refunded) await refundRateLimit(rlKey, rl.stamp);
     // Log ringkas (pesan singkat) — tanpa objek error mentah yang bisa memuat PII.
     console.error("POST /api/orders/lookup gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Gagal mengambil data pesanan" }, { status: 500 });
