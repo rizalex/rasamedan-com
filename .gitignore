@@ -11,13 +11,12 @@
 /build
 
 # environment (JANGAN commit kredensial)
-.env
-.env.local
-.env*.local
+.env*
+!.env.example
 
-# uploads foto produk (runtime, bukan bagian repo)
-/public/uploads/*
-!/public/uploads/.gitkeep
+# Foto produk ada di R2 (Skill 27). public/uploads tidak dipakai lagi dan tidak
+# boleh berisi file (deploy ditolak scripts/check-deploy-env.mjs).
+/public/uploads/
 
 # debug logs
 npm-debug.log*
@@ -31,3 +30,23 @@ next-env.d.ts
 # OS
 .DS_Store
 Thumbs.db
+
+# Cloudflare Workers (OpenNext / wrangler)
+/.open-next/
+/.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Pengaturan lokal Claude Code per mesin (izin pribadi) — jangan di-commit
+.claude/settings.local.json
+
+# Ekspor data production (Skill 25) — berisi data pribadi pelanggan
+/db-export/
+
+# File SQL berisi data (backup D1, ekspor) tidak boleh ter-commit. Pengecualian:
+# skema & seed yang memang bagian repo.
+*.sql
+!/migrations/*.sql
+!/db/seed/*.sql
+!/docs/legacy/*.sql

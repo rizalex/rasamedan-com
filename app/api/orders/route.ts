@@ -1,20 +1,39 @@
 import { NextResponse } from "next/server";
-import type { PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import {
+  batch,
+  dbErrorMessage,
+  execute,
+  isUniqueViolation,
+  placeholders,
+  query,
+  statement,
+} from "@/lib/db";
 import type { CheckoutItem, FulfillmentMethod } from "@/lib/orders";
-import { verifyRecaptcha } from "@/lib/recaptcha";
-import { checkRateLimit, recordFailure, resetRateLimit } from "@/lib/rate-limit";
+import { verifyCaptcha } from "@/lib/turnstile";
+import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
+import { isValidPhone, normalizePhone } from "@/lib/phone.mjs";
+import {
+  checkRateLimit,
+  consumeRateLimit,
+  refundRateLimit,
+} from "@/lib/rate-limit";
+
+// Batas pembuatan pesanan per IP (Skill 21.2 no. 3).
+const ORDER_LIMIT = 10; // pesanan sukses per jam
+const CAPTCHA_FAIL_LIMIT = 30; // captcha gagal per jam
+const ORDER_WINDOW_MS = 60 * 60 * 1000; // 1 jam
+
+function tooManyOrders(retryAfterSec: number) {
+  const mins = Math.ceil(retryAfterSec / 60);
+  return NextResponse.json(
+    { error: `Terlalu banyak pesanan dari jaringan ini. Coba lagi dalam ${mins} menit.` },
+    { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
+  );
+}
 
 export const dynamic = "force-dynamic";
 
 type IncomingItem = { productId: number; variant: string | null; quantity: number };
-
-/** Alamat IP client (di belakang proxy/Passenger memakai header X-Forwarded-For). */
-function getClientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "local";
-}
 
 /** Tanggal WIB (Asia/Jakarta) dalam format YYYYMMDD untuk Order ID. */
 function dateWibYYYYMMDD(): string {
@@ -27,129 +46,44 @@ function dateWibYYYYMMDD(): string {
   return s.replace(/-/g, "");
 }
 
-interface ProductRow extends RowDataPacket {
+interface ProductRow {
   id: number;
   name: string;
   price: number;
   weight_grams: number;
 }
 
-interface VariantWeightRow extends RowDataPacket {
+interface VariantRow {
   product_id: number;
   name: string;
+  price_delta: number;
   weight_grams: number;
 }
 
-interface OrderRow extends RowDataPacket {
-  id: number;
-  order_code: string;
-  recipient_name: string;
-  fulfillment_method: string;
-  status: string;
-  total_estimate: number | null;
-  created_at: Date;
-}
-
-interface OrderItemRow extends RowDataPacket {
-  order_id: number;
-  product_name: string;
-  variant: string | null;
-  quantity: number;
-  unit_price: number;
-}
-
 /**
- * GET /api/orders?phone=...&code=...
- * Cek status pesanan tanpa akun. `phone` WAJIB dan SELALU jadi filter — pelanggan
- * hanya bisa melihat pesanan milik nomor HP-nya sendiri (SKILLS.md Skill 8).
- * Semua parameter memakai parameterized query (aman dari SQL injection).
+ * Error item keranjang dengan kode terstruktur, agar klien bisa menampilkan
+ * pesan sesuai bahasa aktif dan menawarkan "hapus dari keranjang".
  */
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const phone = (url.searchParams.get("phone") ?? "").trim();
-  const code = (url.searchParams.get("code") ?? "").trim();
-  const recaptchaToken = (url.searchParams.get("captcha") ?? "").trim();
-  const ip = getClientIp(req);
-  const rlKey = `checkorder:${ip}`;
-
-  // 1) Rate limit — cegah brute force enumerasi nomor HP / Order ID.
-  const rl = checkRateLimit(rlKey);
-  if (rl.limited) {
-    const mins = Math.ceil(rl.retryAfterSec / 60);
-    return NextResponse.json(
-      { error: `Terlalu banyak percobaan. Coba lagi dalam ${mins} menit.` },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
-    );
-  }
-
-  if (!phone) {
-    return NextResponse.json(
-      { error: "Nomor HP wajib diisi" },
-      { status: 400 }
-    );
-  }
-
-  // 2) Verifikasi reCAPTCHA SEBELUM query DB (dilewati bila key tidak dikonfigurasi).
-  const captcha = await verifyRecaptcha(recaptchaToken, ip);
-  if (!captcha.ok) {
-    recordFailure(rlKey);
-    return NextResponse.json({ error: captcha.error }, { status: 400 });
-  }
-
-  try {
-    // phone selalu difilter; code opsional sebagai filter tambahan (bukan pengganti).
-    const params: (string | number)[] = [phone];
-    let sql =
-      "SELECT id, order_code, recipient_name, fulfillment_method, status, total_estimate, created_at FROM orders WHERE phone = ?";
-    if (code) {
-      sql += " AND order_code = ?";
-      params.push(code);
-    }
-    sql += " ORDER BY created_at DESC LIMIT 50";
-
-    const [orders] = await pool.query<OrderRow[]>(sql, params);
-    if (orders.length === 0) {
-      // Hitung sebagai percobaan gagal (kemungkinan menebak nomor/kode).
-      recordFailure(rlKey);
-      return NextResponse.json({ orders: [] });
-    }
-    // Pencarian valid → reset penghitung untuk IP ini.
-    resetRateLimit(rlKey);
-
-    const ids = orders.map((o) => o.id);
-    const [items] = await pool.query<OrderItemRow[]>(
-      "SELECT order_id, product_name, variant, quantity, unit_price FROM order_items WHERE order_id IN (?)",
-      [ids]
-    );
-
-    const result = orders.map((o) => ({
-      order_code: o.order_code,
-      recipient_name: o.recipient_name,
-      fulfillment_method: o.fulfillment_method,
-      status: o.status,
-      total_estimate: o.total_estimate,
-      created_at: o.created_at,
-      items: items
-        .filter((it) => it.order_id === o.id)
-        .map((it) => ({
-          product_name: it.product_name,
-          variant: it.variant,
-          quantity: it.quantity,
-          unit_price: it.unit_price,
-        })),
-    }));
-
-    return NextResponse.json({ orders: result });
-  } catch (err) {
-    console.error("GET /api/orders gagal:", err);
-    return NextResponse.json(
-      { error: "Gagal mengambil data pesanan" },
-      { status: 500 }
-    );
-  }
+function itemError(
+  code: "PRODUCT_NOT_FOUND" | "VARIANT_INVALID" | "VARIANT_REQUIRED",
+  error: string,
+  productId: number,
+  variant: string | null
+) {
+  return NextResponse.json({ error, code, productId, variant }, { status: 409 });
 }
+
+// Cek status pesanan dipindah ke POST /api/orders/lookup (Skill 21): nomor HP
+// tidak lagi masuk URL/log. GET pada route ini sengaja tidak ada (405).
 
 export async function POST(req: Request) {
+  // Hanya JSON: form lintas situs (enctype text/plain) tidak memicu preflight
+  // CORS, sehingga tanpa cek ini halaman lain bisa membuat pesanan palsu atas
+  // nama pengunjungnya (CSRF). fetch() dengan JSON dari situs ini selalu lolos.
+  const contentType = req.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    return NextResponse.json({ error: "Content-Type harus application/json" }, { status: 415 });
+  }
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -165,8 +99,47 @@ export async function POST(req: Request) {
   const locationNote = body.location_note ? String(body.location_note).trim() : null;
   const note = body.note ? String(body.note).trim() : null;
   const rawItems = Array.isArray(body.items) ? (body.items as IncomingItem[]) : [];
+  const captchaToken = String(body.captchaToken ?? "").trim();
+  const ip = getClientIp(req);
+  const ipKey = rateLimitKeyFromIp(ip);
+  // Dua kunci terpisah: kuota pesanan sukses, dan kegagalan captcha (batas lebih
+  // longgar) — agar token sampah tidak bisa mengunci checkout pelanggan asli.
+  const orderKey = `order:${ipKey}`;
+  const captchaKey = `ordercaptcha:${ipKey}`;
+
+  // 1) Rate limit — tolak cepat sebelum kerja lain.
+  const orderRl = await checkRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
+  if (orderRl.limited) return tooManyOrders(orderRl.retryAfterSec);
+  // Jatah "captcha gagal" diambil atomik di D1 sebelum captcha (anti burst paralel),
+  // lalu dikembalikan bila captcha lolos.
+  const captchaRl = await consumeRateLimit(captchaKey, CAPTCHA_FAIL_LIMIT, ORDER_WINDOW_MS);
+  if (captchaRl.limited) return tooManyOrders(captchaRl.retryAfterSec);
+
+  // 2) Verifikasi Turnstile SEBELUM kerja lain. Error dikirim sebagai kode agar
+  // klien menampilkannya sesuai bahasa aktif.
+  const captcha = await verifyCaptcha(captchaToken, ip, "checkout");
+  if (!captcha.ok) {
+    // 503 = salah konfigurasi server (bukan ulah klien) → jatah dikembalikan.
+    if (captcha.status === 503) await refundRateLimit(captchaKey, captchaRl.stamp);
+    return NextResponse.json({ error: captcha.code, code: captcha.code }, { status: captcha.status });
+  }
+  await refundRateLimit(captchaKey, captchaRl.stamp);
 
   // --- Validasi ---
+  // Batas panjang input (anti penyalahgunaan; selaras batas kolom DB).
+  if (
+    recipientName.length > 100 ||
+    phone.length > 30 ||
+    (address?.length ?? 0) > 500 ||
+    (city?.length ?? 0) > 120 ||
+    (locationNote?.length ?? 0) > 500 ||
+    (note?.length ?? 0) > 500
+  ) {
+    return NextResponse.json(
+      { error: "Ada isian yang melebihi batas panjang" },
+      { status: 400 }
+    );
+  }
   if (method !== "kurir" && method !== "pickup") {
     return NextResponse.json({ error: "Metode pengambilan tidak valid" }, { status: 400 });
   }
@@ -176,64 +149,123 @@ export async function POST(req: Request) {
   if (!phone) {
     return NextResponse.json({ error: "Nomor HP wajib diisi" }, { status: 400 });
   }
+  // Simpan dalam format ternormalisasi agar Cek Pesanan cocok apa pun format ketiknya.
+  const phoneNorm = normalizePhone(phone);
+  if (!isValidPhone(phoneNorm)) {
+    return NextResponse.json({ error: "Nomor HP tidak valid" }, { status: 400 });
+  }
   if (method === "kurir" && (!address || !city)) {
     return NextResponse.json(
       { error: "Alamat dan kecamatan/kota wajib diisi untuk pengiriman kurir" },
       { status: 400 }
     );
   }
-  const items = rawItems
-    .map((it) => ({
-      productId: Number(it.productId),
-      variant: it.variant ? String(it.variant) : null,
-      quantity: Math.floor(Number(it.quantity)),
-    }))
-    .filter((it) => Number.isFinite(it.productId) && it.quantity > 0);
-  if (items.length === 0) {
+  if (rawItems.length === 0) {
     return NextResponse.json({ error: "Keranjang kosong" }, { status: 400 });
   }
+  // Batas jumlah baris dicek pada array mentah, sebelum diproses.
+  if (rawItems.length > 50) {
+    return NextResponse.json(
+      { error: "Maksimal 50 baris item per pesanan" },
+      { status: 400 }
+    );
+  }
+  const items = rawItems.map((it) => ({
+    productId: Number(it?.productId),
+    variant: it?.variant ? String(it.variant).slice(0, 100) : null,
+    quantity: Number(it?.quantity),
+  }));
+  // Baris tidak valid DITOLAK, bukan dibuang diam-diam (agar item pelanggan
+  // tidak hilang dari pesanan tanpa pemberitahuan).
+  if (items.some((it) => !Number.isInteger(it.productId))) {
+    return NextResponse.json({ error: "Ada item yang tidak valid" }, { status: 400 });
+  }
+  if (items.some((it) => !Number.isInteger(it.quantity) || it.quantity < 1 || it.quantity > 99)) {
+    return NextResponse.json(
+      { error: "Jumlah per item harus 1–99" },
+      { status: 400 }
+    );
+  }
 
-  let conn: PoolConnection | null = null;
+  // 3) Ambil satu jatah kuota secara atomik (cek + catat dalam satu INSERT
+  // bersyarat di D1, agar burst paralel tidak lolos). Salah isi form sudah ditolak di
+  // atas tanpa memotong kuota; di sini jatah hanya dikembalikan untuk error
+  // server (catch), bukan untuk produk/varian tidak valid — agar request itu
+  // tidak bisa membebani DB tanpa batas.
+  const quota = await consumeRateLimit(orderKey, ORDER_LIMIT, ORDER_WINDOW_MS);
+  if (quota.limited) return tooManyOrders(quota.retryAfterSec);
+
   try {
-    conn = await pool.getConnection();
-
     // Ambil nama & harga produk dari DB (jangan percaya harga dari client).
+    // Maks 50 id unik (batas baris di atas) — di bawah batas 100 parameter D1.
     const ids = [...new Set(items.map((it) => it.productId))];
-    const [productRows] = await conn.query<ProductRow[]>(
-      "SELECT id, name, price, weight_grams FROM products WHERE id IN (?)",
-      [ids]
+    const idPlaceholders = placeholders(ids.length);
+    const productRows = await query<ProductRow>(
+      `SELECT id, name, price, weight_grams FROM products WHERE id IN (${idPlaceholders})`,
+      ids
     );
     const byId = new Map(productRows.map((p) => [p.id, p]));
 
-    // Berat per varian (override). Kunci: `${productId}::${variantName}`.
-    const [variantRows] = await conn.query<VariantWeightRow[]>(
-      "SELECT product_id, name, weight_grams FROM product_variants WHERE product_id IN (?)",
-      [ids]
+    // Varian per produk: selisih harga & berat (override). Dicocokkan per nama.
+    const variantRows = await query<VariantRow>(
+      `SELECT product_id, name, price_delta, weight_grams FROM product_variants
+        WHERE product_id IN (${idPlaceholders})`,
+      ids
     );
-    const variantWeight = new Map<string, number>();
+    const variantsByProduct = new Map<number, Map<string, VariantRow>>();
     for (const v of variantRows) {
-      variantWeight.set(`${v.product_id}::${v.name}`, v.weight_grams);
+      if (!variantsByProduct.has(v.product_id)) {
+        variantsByProduct.set(v.product_id, new Map());
+      }
+      variantsByProduct.get(v.product_id)!.set(v.name, v);
     }
 
     const orderItems: CheckoutItem[] = [];
     for (const it of items) {
       const p = byId.get(it.productId);
       if (!p) {
-        return NextResponse.json(
-          { error: `Produk (id ${it.productId}) tidak ditemukan` },
-          { status: 400 }
+        return itemError(
+          "PRODUCT_NOT_FOUND",
+          `Produk (id ${it.productId}) tidak ditemukan`,
+          it.productId,
+          it.variant
         );
       }
-      // Gunakan berat varian jika ada (> 0), fallback ke berat produk utama.
-      const vWeight = it.variant
-        ? variantWeight.get(`${p.id}::${it.variant}`) ?? 0
-        : 0;
+      // Validasi varian dari client terhadap DB:
+      // - produk tanpa varian: tolak nama varian apa pun;
+      // - produk bervarian: varian WAJIB dipilih dan harus terdaftar — bila tidak,
+      //   klien bisa membayar harga dasar untuk varian yang lebih mahal.
+      const known = variantsByProduct.get(p.id);
+      if (known && !it.variant) {
+        return itemError(
+          "VARIANT_REQUIRED",
+          `Pilih varian untuk produk "${p.name}"`,
+          p.id,
+          null
+        );
+      }
+      const v = it.variant ? known?.get(it.variant) : undefined;
+      if (it.variant && !v) {
+        return itemError(
+          "VARIANT_INVALID",
+          `Varian "${it.variant}" untuk produk "${p.name}" sudah tidak tersedia`,
+          p.id,
+          it.variant
+        );
+      }
+      // Harga & berat dari DB: harga = produk + selisih varian; berat varian
+      // bila > 0, selain itu berat produk (rumus sama dengan lib/pricing.ts).
+      const unitPrice = p.price + (v ? Number(v.price_delta) : 0);
+      if (unitPrice < 0) {
+        throw new Error(`Harga varian negatif untuk produk ${p.id}`);
+      }
+      const vWeight = v ? Number(v.weight_grams) : 0;
       orderItems.push({
         productId: p.id,
         name: p.name,
-        variant: it.variant,
+        variant: v ? v.name : null,
         quantity: it.quantity,
-        unit_price: p.price,
+        unit_price: unitPrice,
         weight_grams: vWeight > 0 ? vWeight : p.weight_grams,
       });
     }
@@ -241,71 +273,107 @@ export async function POST(req: Request) {
       (sum, it) => sum + it.unit_price * it.quantity,
       0
     );
+    // Batas wajar total (setara INT UNSIGNED skema lama, juga menjaga data saat
+    // ekspor balik): tolak sebelum INSERT agar tidak berujung error DB (yang
+    // mengembalikan jatah kuota).
+    if (totalEstimate > 4_294_967_295) {
+      return NextResponse.json(
+        { error: "Total pesanan terlalu besar" },
+        { status: 400 }
+      );
+    }
     const totalWeight = orderItems.reduce(
       (sum, it) => sum + it.weight_grams * it.quantity,
       0
     );
 
-    await conn.beginTransaction();
-
-    // Generate Order ID unik: retry pada UNIQUE constraint (aman dari race).
+    // Generate Order ID unik: nomor urut berikutnya hari ini (WIB), lalu retry
+    // bila UNIQUE order_code bentrok dengan request bersamaan.
     const prefix = `ORD-${dateWibYYYYMMDD()}-`;
-    const [maxRows] = await conn.query<RowDataPacket[]>(
-      "SELECT order_code FROM orders WHERE order_code LIKE ? ORDER BY order_code DESC LIMIT 1",
-      [`${prefix}%`]
+    // Nomor urut dibandingkan sebagai angka (bukan string) agar tetap benar
+    // bila suatu hari melewati 9999.
+    const maxRows = await query<{ seq: number | null }>(
+      "SELECT MAX(CAST(substr(order_code, ?) AS INTEGER)) AS seq FROM orders WHERE order_code LIKE ?",
+      [prefix.length + 1, `${prefix}%`]
     );
-    let seq =
-      maxRows.length > 0
-        ? parseInt(String(maxRows[0].order_code).slice(-4), 10) + 1
-        : 1;
+    let seq = Number(maxRows[0]?.seq ?? 0) + 1;
 
-    let orderId = 0;
+    // Semua item sebagai satu parameter JSON yang dibuat server (bukan input
+    // mentah klien): disisipkan dengan SATU statement lewat json_each, sehingga
+    // checkout selalu 2 statement berapa pun jumlah baris — paket Free D1
+    // membatasi 50 query per invocation Worker.
+    const itemsJson = JSON.stringify(
+      orderItems.map((it) => ({
+        p: it.productId,
+        n: it.name,
+        v: it.variant,
+        q: it.quantity,
+        u: it.unit_price,
+      }))
+    );
+
     let orderCode = "";
-    for (let attempt = 0; attempt < 20; attempt++) {
+    let saved = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
       orderCode = `${prefix}${String(seq).padStart(4, "0")}`;
       try {
-        const [res] = await conn.execute<ResultSetHeader>(
-          `INSERT INTO orders
-             (order_code, recipient_name, phone, fulfillment_method,
-              address, city, location_note, status, total_estimate, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'Menunggu Konfirmasi', ?, ?)`,
-          [
-            orderCode,
-            recipientName,
-            phone,
-            method,
-            address,
-            city,
-            locationNote,
-            totalEstimate,
-            note,
-          ]
-        );
-        orderId = res.insertId;
+        // Order + semua item dalam satu batch D1 (atomik): gagal di mana pun →
+        // tidak ada pesanan setengah jadi. Item merujuk pesanan lewat order_code
+        // karena id baru belum diketahui sebelum batch berjalan.
+        const [, itemsRes] = await batch([
+          statement(
+            `INSERT INTO orders
+               (order_code, recipient_name, phone, fulfillment_method,
+                address, city, location_note, status, total_estimate, note)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'Menunggu Konfirmasi', ?, ?)`,
+            [
+              orderCode,
+              recipientName,
+              phoneNorm,
+              method,
+              address,
+              city,
+              locationNote,
+              totalEstimate,
+              note,
+            ]
+          ),
+          // Snapshot nama & harga saat pesan, urut sesuai keranjang.
+          statement(
+            `INSERT INTO order_items
+               (order_id, product_id, product_name, variant, quantity, unit_price)
+             SELECT o.id,
+                    json_extract(j.value, '$.p'),
+                    json_extract(j.value, '$.n'),
+                    json_extract(j.value, '$.v'),
+                    json_extract(j.value, '$.q'),
+                    json_extract(j.value, '$.u')
+               FROM orders o, json_each(?) j
+              WHERE o.order_code = ?
+              ORDER BY j.key`,
+            [itemsJson, orderCode]
+          ),
+        ]);
+        // Pengaman: semua item harus tersimpan (bila tidak, pesanan dibatalkan).
+        if (itemsRes.meta.changes !== orderItems.length) {
+          await execute("DELETE FROM orders WHERE order_code = ?", [orderCode]);
+          throw new Error(
+            `Item pesanan tersimpan ${itemsRes.meta.changes}/${orderItems.length}`
+          );
+        }
+        saved = true;
         break;
       } catch (err: unknown) {
-        if ((err as { code?: string }).code === "ER_DUP_ENTRY") {
+        if (isUniqueViolation(err)) {
           seq++;
           continue;
         }
         throw err;
       }
     }
-    if (!orderId) {
+    if (!saved) {
       throw new Error("Gagal membuat Order ID unik setelah beberapa percobaan");
     }
-
-    // Insert order_items (snapshot nama & harga).
-    for (const it of orderItems) {
-      await conn.execute(
-        `INSERT INTO order_items
-           (order_id, product_id, product_name, variant, quantity, unit_price)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, it.productId, it.name, it.variant, it.quantity, it.unit_price]
-      );
-    }
-
-    await conn.commit();
 
     return NextResponse.json({
       order_code: orderCode,
@@ -314,19 +382,12 @@ export async function POST(req: Request) {
       total_weight: totalWeight,
     });
   } catch (err) {
-    if (conn) {
-      try {
-        await conn.rollback();
-      } catch {
-        /* abaikan */
-      }
-    }
-    console.error("POST /api/orders gagal:", err);
+    await refundRateLimit(orderKey, quota.stamp);
+    // Log ringkas (pesan singkat), bukan objek error utuh yang bisa memuat PII.
+    console.error("POST /api/orders gagal:", dbErrorMessage(err));
     return NextResponse.json(
       { error: "Gagal menyimpan pesanan. Silakan coba lagi." },
       { status: 500 }
     );
-  } finally {
-    if (conn) conn.release();
   }
 }

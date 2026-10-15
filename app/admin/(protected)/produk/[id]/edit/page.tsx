@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import ProductForm from "@/components/admin/ProductForm";
 import { getProductById } from "@/lib/products";
-import { getAllCategories } from "@/lib/categories";
+import { getAdminCategories } from "@/lib/categories";
 import styles from "@/components/admin/admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export default async function EditProductPage({
   const { id } = await params;
   const [product, categories] = await Promise.all([
     getProductById(Number(id)),
-    getAllCategories(),
+    getAdminCategories(),
   ]);
   if (!product) notFound();
 

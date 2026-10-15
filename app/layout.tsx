@@ -41,14 +41,14 @@ export const metadata: Metadata = {
     title: `${SITE_NAME} - ${SITE_TAGLINE}`,
     description:
       "Katalog oleh-oleh khas Medan: kue, makanan kering, dan sirup. Pesan mudah tanpa akun, konfirmasi via WhatsApp.",
-    images: [{ url: "/images/hero-medan.png", width: 1200, height: 630, alt: SITE_NAME }],
+    images: [{ url: "/images/og-image.jpg", width: 1200, height: 630, alt: SITE_NAME }],
   },
   twitter: {
     card: "summary_large_image",
     title: `${SITE_NAME} - ${SITE_TAGLINE}`,
     description:
       "Katalog oleh-oleh khas Medan: kue, makanan kering, dan sirup. Pesan mudah tanpa akun, konfirmasi via WhatsApp.",
-    images: ["/images/hero-medan.png"],
+    images: ["/images/og-image.jpg"],
   },
 };
 

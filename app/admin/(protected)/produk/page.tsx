@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAllProducts } from "@/lib/products";
-import { formatRupiah } from "@/lib/format";
+import { formatRupiah, formatWeight } from "@/lib/format";
+import { variantPrice, variantWeight } from "@/lib/pricing";
 import DeleteProductButton from "@/components/admin/DeleteProductButton";
 import styles from "@/components/admin/admin.module.css";
 
@@ -49,12 +50,14 @@ export default async function AdminProductsPage() {
                 </td>
                 <td>
                   <strong>{p.name}</strong>
+                  {p.is_featured && <span className={styles.featuredBadge}>Pilihan</span>}
                   <div className={styles.hint}>{p.slug}</div>
-                  {p.variants.length > 0 && (
-                    <div className={styles.hint}>
-                      Varian: {p.variants.join(", ")}
+                  {p.variants.map((v) => (
+                    <div key={v.name} className={styles.hint}>
+                      {v.name} · {formatRupiah(variantPrice(p, v.name) ?? p.price)} ·{" "}
+                      {formatWeight(variantWeight(p, v.name))}
                     </div>
-                  )}
+                  ))}
                 </td>
                 <td style={{ textTransform: "capitalize" }}>{p.category}</td>
                 <td>{formatRupiah(p.price)}</td>

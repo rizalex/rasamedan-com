@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket, ResultSetHeader } from "mysql2/promise";
-import { pool } from "@/lib/db";
+import { dbErrorMessage, execute, isUniqueViolation, query } from "@/lib/db";
 import { getAdminSession } from "@/lib/auth";
 import { validateCategoryInput } from "@/lib/categories";
 
@@ -25,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const [dup] = await pool.query<RowDataPacket[]>(
+    const dup = await query(
       "SELECT id FROM categories WHERE slug = ? LIMIT 1",
       [parsed.slug]
     );
@@ -35,13 +34,19 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const [res] = await pool.execute<ResultSetHeader>(
-      "INSERT INTO categories (name, slug) VALUES (?, ?)",
-      [parsed.name, parsed.slug]
-    );
-    return NextResponse.json({ ok: true, id: res.insertId, slug: parsed.slug });
+    const res = await execute("INSERT INTO categories (name, slug) VALUES (?, ?)", [
+      parsed.name,
+      parsed.slug,
+    ]);
+    return NextResponse.json({ ok: true, id: res.lastRowId, slug: parsed.slug });
   } catch (err) {
-    console.error("POST /api/admin/categories gagal:", err);
+    if (isUniqueViolation(err)) {
+      return NextResponse.json(
+        { error: `Kategori "${parsed.slug}" sudah ada.` },
+        { status: 400 }
+      );
+    }
+    console.error("POST /api/admin/categories gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Gagal menyimpan kategori" }, { status: 500 });
   }
 }

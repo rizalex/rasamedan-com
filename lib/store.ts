@@ -1,6 +1,6 @@
 /**
  * Info toko (Skill 18) — dibaca dari environment `NEXT_PUBLIC_*` agar bisa
- * diganti saat deploy cPanel tanpa ubah kode. Setiap variabel dirujuk eksplisit
+ * diganti saat deploy tanpa ubah kode. Setiap variabel dirujuk eksplisit
  * supaya Next.js meng-inline nilainya (berlaku di server & client component).
  */
 export interface StoreInfo {

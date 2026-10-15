@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { useCart } from "@/components/cart/CartProvider";
@@ -8,11 +8,13 @@ import { formatRupiah, formatWeight } from "@/lib/format";
 import { buildWaLink } from "@/lib/whatsapp";
 import { formatOrderMessage, type FulfillmentMethod, type OrderConfirmation } from "@/lib/orders";
 import { IconWhatsApp, IconCheck } from "@/components/ui/icons";
+import CaptchaWidget, { type CaptchaHandle } from "@/components/security/CaptchaWidget";
+import { captchaErrorKey } from "@/lib/captcha-errors";
 import styles from "./CheckoutView.module.css";
 
-export default function CheckoutView() {
+export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: string }) {
   const { t } = useI18n();
-  const { items, hydrated, subtotal, totalWeight, clear } = useCart();
+  const { items, hydrated, subtotal, totalWeight, clear, removeItem } = useCart();
 
   const [method, setMethod] = useState<FulfillmentMethod>("kurir");
   const [form, setForm] = useState({
@@ -25,17 +27,69 @@ export default function CheckoutView() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ order: OrderConfirmation; waLink: string } | null>(
+  // Baris keranjang yang ditolak server (varian/produk sudah tidak tersedia),
+  // agar pelanggan bisa menghapus atau memilih ulang varian langsung dari sini.
+  const [badItem, setBadItem] = useState<{
+    productId: number;
+    variant: string | null;
+    slug: string | null;
+    needsVariant: boolean;
+  } | null>(null);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [success, setSuccess] = useState<{
+    order: OrderConfirmation;
+    waLink: string;
+    /** Total server berbeda dari subtotal keranjang (harga diperbarui admin). */
+    priceChanged: boolean;
+  } | null>(
     null
   );
+
+  const captcha = useRef<CaptchaHandle>(null);
+  const captchaEnabled = !!captchaSiteKey;
+  // Token Turnstile sekali pakai — reset setelah setiap submit.
+  function resetCaptcha() {
+    captcha.current?.reset();
+  }
 
   function update(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
+  /** Pesan i18n untuk error item terstruktur dari server (kode 409). */
+  function itemErrorMessage(data: { code?: string; productId?: number; variant?: string | null }) {
+    // Server mengirim varian baris yang ditolak (null untuk VARIANT_REQUIRED),
+    // jadi cocokkan persis agar baris lain dari produk yang sama tidak terhapus.
+    const line = items.find(
+      (it) => it.productId === data.productId && it.variant === (data.variant ?? null)
+    );
+    const product = line?.name ?? "";
+    const key =
+      data.code === "VARIANT_REQUIRED"
+        ? "checkout.errVariantRequired"
+        : data.code === "VARIANT_INVALID"
+          ? "checkout.errVariantInvalid"
+          : "checkout.errProductGone";
+    setBadItem(
+      line
+        ? {
+            productId: line.productId,
+            variant: line.variant,
+            slug: line.slug,
+            needsVariant: data.code === "VARIANT_REQUIRED",
+          }
+        : null
+    );
+    // Replacer berupa fungsi: string pengganti dengan pola "$&" dsb. tidak ditafsirkan.
+    return t(key)
+      .replace("{product}", () => product)
+      .replace("{variant}", () => data.variant ?? "");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setBadItem(null);
 
     // Validasi client ringan (server tetap sumber kebenaran).
     if (!form.recipient_name.trim() || !form.phone.trim()) {
@@ -44,6 +98,10 @@ export default function CheckoutView() {
     }
     if (method === "kurir" && (!form.address.trim() || !form.city.trim())) {
       setError(t("checkout.errAddress"));
+      return;
+    }
+    if (captchaEnabled && !captchaToken) {
+      setError(t("captcha.required"));
       return;
     }
 
@@ -60,6 +118,7 @@ export default function CheckoutView() {
           city: method === "kurir" ? form.city : null,
           location_note: method === "kurir" ? form.location_note : null,
           note: form.note,
+          captchaToken,
           items: items.map((it) => ({
             productId: it.productId,
             variant: it.variant,
@@ -70,7 +129,15 @@ export default function CheckoutView() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? t("checkout.errGeneric"));
+        const captchaKey = captchaErrorKey(data.code);
+        setError(
+          captchaKey
+            ? t(captchaKey)
+            : res.status === 409 && data.code
+              ? itemErrorMessage(data)
+              : data.error ?? t("checkout.errGeneric")
+        );
+        resetCaptcha();
         setSubmitting(false);
         return;
       }
@@ -91,11 +158,13 @@ export default function CheckoutView() {
 
       // Data sudah tersimpan di DB (respons OK) SEBELUM membuka WhatsApp.
       clear();
-      setSuccess({ order, waLink });
+      // Total final selalu dari server; beri tahu bila berbeda dari keranjang.
+      setSuccess({ order, waLink, priceChanged: data.total_estimate !== subtotal });
       // Coba buka WhatsApp otomatis (best-effort; tombol manual tetap tersedia).
       window.open(waLink, "_blank", "noopener");
     } catch {
       setError(t("checkout.errGeneric"));
+      resetCaptcha();
       setSubmitting(false);
     }
   }
@@ -115,6 +184,14 @@ export default function CheckoutView() {
           <p className={styles.orderId}>
             {t("checkout.orderId")}: <strong>{success.order.order_code}</strong>
           </p>
+          {success.priceChanged && (
+            <p className={styles.notice} role="status">
+              {t("checkout.pricesUpdated").replace(
+                "{total}",
+                formatRupiah(success.order.total_estimate)
+              )}
+            </p>
+          )}
           <a
             className={styles.waBtn}
             href={success.waLink}
@@ -253,7 +330,34 @@ export default function CheckoutView() {
           <p className={styles.note}>{t("cart.shippingNote")}</p>
         </div>
 
+        <CaptchaWidget
+          ref={captcha}
+          siteKey={captchaSiteKey}
+          action="checkout"
+          onToken={setCaptchaToken}
+        />
+
         {error && <p className={styles.error}>{error}</p>}
+        {badItem && (
+          <div className={styles.badItemActions}>
+            <button
+              type="button"
+              className={styles.linkAlt}
+              onClick={() => {
+                removeItem(badItem.productId, badItem.variant);
+                setBadItem(null);
+                setError(null);
+              }}
+            >
+              {t("checkout.removeItem")}
+            </button>
+            {badItem.needsVariant && badItem.slug && (
+              <Link href={`/produk/${badItem.slug}`} className={styles.linkAlt}>
+                {t("checkout.chooseVariant")}
+              </Link>
+            )}
+          </div>
+        )}
 
         <button type="submit" className={styles.submit} disabled={submitting}>
           {submitting ? t("checkout.processing") : t("checkout.placeOrder")}

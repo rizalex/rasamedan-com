@@ -1,13 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import CaptchaWidget, { type CaptchaHandle } from "@/components/security/CaptchaWidget";
 import styles from "./admin.module.css";
+
+// Admin cukup Bahasa Indonesia (CLAUDE.md §4) — pesan kode captcha dari server.
+const CAPTCHA_MESSAGES: Record<string, string> = {
+  CAPTCHA_REQUIRED: "Selesaikan verifikasi captcha terlebih dahulu.",
+  CAPTCHA_FAILED: "Verifikasi captcha gagal. Coba lagi.",
+  CAPTCHA_UNAVAILABLE: "Verifikasi captcha sedang tidak tersedia. Hubungi pengelola situs.",
+};
 
 export default function AccountSettingsForm({
   currentUsername,
+  captchaSiteKey,
 }: {
   currentUsername: string;
+  captchaSiteKey: string;
 }) {
   const router = useRouter();
   const [newUsername, setNewUsername] = useState(currentUsername);
@@ -17,6 +27,9 @@ export default function AccountSettingsForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [token, setToken] = useState("");
+  const captcha = useRef<CaptchaHandle>(null);
+  const captchaEnabled = !!captchaSiteKey;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,12 +41,16 @@ export default function AccountSettingsForm({
       return;
     }
     // Validasi ringan di client (server tetap validasi ulang).
-    if (newPassword && newPassword.length < 8) {
-      setError("Password baru minimal 8 karakter.");
+    if (newPassword && newPassword.length < 12) {
+      setError("Password baru minimal 12 karakter.");
       return;
     }
     if (newPassword && newPassword !== confirmPassword) {
       setError("Konfirmasi password baru tidak cocok.");
+      return;
+    }
+    if (captchaEnabled && !token) {
+      setError(CAPTCHA_MESSAGES.CAPTCHA_REQUIRED);
       return;
     }
 
@@ -47,11 +64,14 @@ export default function AccountSettingsForm({
           newUsername,
           newPassword,
           confirmPassword,
+          captchaToken: token,
         }),
       });
+      // Token captcha sekali pakai: reset setelah setiap submit.
+      captcha.current?.reset();
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Gagal menyimpan perubahan");
+        setError(CAPTCHA_MESSAGES[data.code] ?? data.error ?? "Gagal menyimpan perubahan");
         setLoading(false);
         return;
       }
@@ -72,6 +92,7 @@ export default function AccountSettingsForm({
       setLoading(false);
       router.refresh();
     } catch {
+      captcha.current?.reset();
       setError("Terjadi kesalahan. Coba lagi.");
       setLoading(false);
     }
@@ -106,7 +127,7 @@ export default function AccountSettingsForm({
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           autoComplete="new-password"
-          minLength={8}
+          minLength={12}
         />
       </label>
 
@@ -119,6 +140,8 @@ export default function AccountSettingsForm({
           autoComplete="new-password"
         />
       </label>
+
+      <CaptchaWidget ref={captcha} siteKey={captchaSiteKey} action="account" onToken={setToken} />
 
       {error && <p className={styles.error}>{error}</p>}
       {success && <p className={styles.success}>{success}</p>}

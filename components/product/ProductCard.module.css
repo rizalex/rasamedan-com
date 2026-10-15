@@ -53,3 +53,10 @@
   font-weight: 600;
   color: var(--color-primary);
 }
+
+/* "Mulai dari" bila harga varian berbeda-beda */
+.priceFrom {
+  font-size: 0.8em;
+  font-weight: 500;
+  opacity: 0.8;
+}

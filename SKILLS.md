@@ -1,7 +1,7 @@
 # SKILLS.md — Rasa Medan
-## Modul Kerja untuk Claude Code (Skill 1–22)
+## Modul Kerja untuk Claude Code (Skill 1–30)
 
-Satu-satunya daftar skill proyek ini. Per 12 Oktober 2026 file ini menggabungkan `SKILLS.md` lama (Skill 1–12) dan `SKILLS-ADDENDUM.md` (Skill 13–19), lalu menambahkan gerbang review (Skill 20–21) dan pelacakan pengiriman (Skill 22).
+Satu-satunya daftar skill proyek ini. Per 12 Oktober 2026 file ini menggabungkan `SKILLS.md` lama (Skill 1–12) dan `SKILLS-ADDENDUM.md` (Skill 13–19), lalu menambahkan gerbang review (Skill 20–21) dan pelacakan pengiriman (Skill 22). Per 13 Oktober 2026 ditambahkan BAGIAN E: migrasi infrastruktur dari cPanel ke Cloudflare Workers (Skill 23–30).
 
 - Requirement (sumber kebenaran): `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.md`
 - Aturan teknis & bisnis untuk agent: `CLAUDE.md`
@@ -30,16 +30,24 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | Skill | Topik | Status |
 |---|---|---|
 | 1–12 | MVP: setup & DB, dummy, beranda, katalog, detail, cart, checkout+WA, cek pesanan, admin, i18n, halaman pendukung, deploy | ✅ Selesai |
-| 13 | Berat produk & info ongkir manual | ⚠️ Berat produk jalan; berat per varian belum bisa diisi dari admin (backlog 20.4) |
+| 13 | Berat produk & info ongkir manual | ✅ Selesai — berat per varian kini bisa diisi dari admin (Skill 20.4) |
 | 14 | Kategori dinamis | ✅ Selesai |
-| 15 | Captcha (Turnstile) & hardening login | ⚠️ Dokumen sudah Turnstile; kode di repo masih reCAPTCHA |
-| 16 | Pengaturan akun admin | ⚠️ Jalan; sesi di perangkat lain tidak ikut dicabut (Skill 21.2 no. 5) |
+| 15 | Captcha (Turnstile) & hardening login | ✅ Turnstile di login, cek pesanan, checkout (Skill 21); fail-closed di production; rate limit di D1, tahan restart (Skill 28). AC "diuji di server" diganti: diuji di Workers saat deploy (21.3) |
+| 16 | Pengaturan akun admin | ✅ Ganti password mencabut sesi di semua perangkat (`session_version`, Skill 21) |
 | 17 | Redesign visual | ✅ Palet diterapkan; kesesuaian dengan mockup belum diverifikasi di browser |
 | 18 | Lokasi toko & info kontak | ✅ Selesai |
-| 19 | SEO & Google indexing | ⚠️ Kode selesai; gambar hero 9 MB menurunkan 19.6; 19.8 dikerjakan pemilik |
-| 20 | Code review (gerbang kualitas) | 🆕 Berulang setiap skill + backlog terbuka |
-| 21 | Security review & hardening | 🆕 Ada temuan terbuka, termasuk 1 Kritis |
-| 22 | Lacak pengiriman via api.co.id | 🆕 Rancangan; menunggu verifikasi 22.0 |
+| 19 | SEO & Google indexing | ⚠️ Kode selesai; hero dikompres 9 MB → 188 KB WebP + OG JPEG 145 KB (20.4). JSON-LD kini AggregateOffer untuk harga varian. 19.8 dikerjakan pemilik |
+| 20 | Code review (gerbang kualitas) | ✅ Audit penuh 20.2 (13 Okt 2026): 5 Penting + 9 Minor diperbaiki; 20.3 lolos (tsc, build, lint ESLint baru, tanpa file _tmp); backlog 20.4 selesai kecuali tugas pemilik (ganti foto hero). Tetap berulang per skill |
+| 21 | Security review & hardening | ✅ 21.2 no. 1–10 dikerjakan (13 Okt 2026, rincian di 21.2a); checklist 21.3 versi Cloudflare. ⏳ Pemilik: rotasi `ADMIN_SESSION_SECRET` di cPanel yang masih live + Workers, ganti password admin lama. Tetap berulang per skill (21.1) |
+| 22 | Lacak pengiriman via api.co.id | 🟡 Jalur cadangan selesai (14 Okt 2026): admin isi kurir + resi, pelanggan lihat resi + tautan lacak resmi kurir (22.1–22.3). ⏳ 22.0 (uji API oleh pemilik) → 22.4 linimasa via api.co.id. Rincian 22a |
+| 23 | Setup runtime Cloudflare Workers | ✅ Kode selesai (OpenNext build + preview lokal lolos, bundle 1,4 MiB gzip, secret .env disaring dari bundle). Deploy uji ke workers.dev menunggu pemilik (`wrangler login`, rotasi secret, `NEXT_PUBLIC_SITE_URL`) |
+| 24 | Migrasi database MySQL → D1 | ✅ Kode selesai (14 Okt 2026): `migrations/0001_init.sql`, `lib/db.ts` D1, semua route via `batch()`/`queryIn`, `mysql2` dihapus; E2E 54 skenario (termasuk checkout 50 baris) lolos di `next dev` + preview workerd (D1 lokal). ⏳ Pemilik: `wrangler d1 create rasamedan` + isi `database_id` (deploy diblokir sampai diisi) |
+| 26 | Rewrite auth untuk Workers | ✅ Kode selesai (14 Okt 2026): PBKDF2-SHA256 Web Crypto (30.000 iterasi, terukur ±5 ms) + HMAC `crypto.subtle`, auth async penuh, `seed:admin` PBKDF2; hash scrypt lama ditolak (reset admin). Rincian 26a |
+| 28 | Turnstile & rate limit di D1 | ✅ Kode selesai (14 Okt 2026): `lib/rate-limit.ts` di tabel D1 `login_failures` (atomik, tahan restart, lintas isolate) untuk login, cek pesanan, checkout, Pengaturan. Turnstile sudah sejak Skill 21. Rincian 28a |
+| 27 | Upload foto: disk → R2 | ✅ Kode selesai (14 Okt 2026): upload ke R2 `UPLOADS`, route GET `/uploads/[...path]`, skrip `uploads:r2` untuk foto lama; teruji di R2 lokal. ⏳ Pemilik: `wrangler r2 bucket create rasa-medan-uploads`. Rincian 27a |
+| 25 | Migrasi data & seed | ✅ Kode selesai (14 Okt 2026): `db:export` (MySQL → SQL D1), `db:import` (precheck + verifikasi), `db/seed/dummy-products.sql`; teruji dengan MariaDB sungguhan (zona waktu +07:00). ⏳ Ekspor/impor production dijalankan saat cutover (Skill 30). Rincian 25a |
+| 29 | Environment, config & build CI | 🟡 Dokumen & kode selesai (14 Okt 2026), AC belum tuntas sampai pemilik merotasi `ADMIN_SESSION_SECRET` (21.2 no. 1): `DEPLOYMENT.md` Cloudflare (versi cPanel diarsip), `.env.example` baru, checklist 21.3 Cloudflare, deploy guard + peringatan WA dummy. ⏳ Pemilik: rotasi secret via `wrangler secret put`, deploy uji workers.dev, (opsional) Workers Builds. Rincian 29a |
+| 30 | Cutover & pensiun cPanel (BAGIAN E) | 🟡 Runbook lengkap di `DEPLOYMENT.md` §11 (14 Okt 2026): persiapan DNS/email, gladi data, latihan domain, hari H berurutan, rollback, penguncian H+2, arsip H+30. ⏳ Eksekusi oleh pemilik (butuh akun Cloudflare & cPanel) |
 
 ---
 
@@ -307,7 +315,7 @@ CREATE TABLE categories (
 
 ### 15.3 Hardening yang sudah ada (pertahankan)
 - Rate limit 5 kegagalan / 15 menit per IP (`lib/rate-limit.ts`).
-- Password admin di-hash dengan scrypt (`lib/auth.ts`).
+- Password admin di-hash dengan scrypt (`lib/auth.ts`). *(Sejak Skill 26: PBKDF2-SHA256 via Web Crypto, `lib/password.mjs`.)*
 - Cookie sesi `httpOnly`, `secure` di production, `sameSite=strict`.
 - HTTPS wajib di production (lihat `DEPLOYMENT.md`).
 
@@ -339,14 +347,14 @@ CREATE TABLE categories (
 
 **Logika Backend:**
 1. Ambil data admin yang sedang login dari session.
-2. Cocokkan **password saat ini** yang diinput dengan hash password di database (`verifyPassword` di `lib/auth.ts`, scrypt) — jika tidak cocok, tolak seluruh perubahan dan tampilkan error, JANGAN proses field lain.
+2. Cocokkan **password saat ini** yang diinput dengan hash password di database (`verifyPassword`, PBKDF2 sejak Skill 26) — jika tidak cocok, tolak seluruh perubahan dan tampilkan error, JANGAN proses field lain.
 3. Jika password saat ini valid:
    - Jika username baru diisi & berbeda dari yang lama → validasi belum dipakai admin lain (kalau nanti ada multi-admin) → update.
-   - Jika password baru diisi → validasi sama dengan konfirmasi → hash dengan `hashPassword` (scrypt) → update.
+   - Jika password baru diisi → validasi sama dengan konfirmasi → hash dengan `hashPassword` (PBKDF2 sejak Skill 26) → update.
 4. Setelah berhasil ubah password, **invalidasi session yang sedang aktif** dan minta admin login ulang dengan kredensial baru (langkah keamanan supaya sesi lama tidak terus valid).
 
 **Validasi Tambahan:**
-- Panjang password baru minimal 8 karakter (silakan sesuaikan kebijakan).
+- Panjang password baru minimal 12 karakter (semula 8; dinaikkan di Skill 26 sebagai kompensasi iterasi PBKDF2).
 - Tampilkan pesan sukses/gagal yang jelas, tapi jangan bocorkan info spesifik (misal jangan bedakan pesan error antara "username salah" vs "password salah" pada proses verifikasi password saat ini — cukup "Password saat ini salah").
 
 **Acceptance Criteria:**
@@ -526,6 +534,22 @@ transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-
 - **i18n:** 8 string di `en.json` belum diterjemahkan; ±9 pesan di komponen admin masih hardcode. Putuskan apakah admin cukup berbahasa Indonesia, lalu catat keputusan itu di `CLAUDE.md`.
 - **Dokumen:** header PRD masih "Versi 1.0" padahal sudah memuat revisi v1.1.
 
+### 20.5 Status backlog 20.4 & audit 20.2 (13 Okt 2026)
+| Butir | Status |
+|---|---|
+| Berat per varian dari admin | ✅ Editor varian terstruktur (nama, selisih harga, berat) di form admin |
+| `price_delta` | ✅ Diimplementasikan (keputusan pemilik): admin → detail (harga berubah per varian) → keranjang → checkout dihitung ulang server → WhatsApp → JSON-LD AggregateOffer. Rumus tunggal di `lib/pricing.ts`. Produk bervarian wajib memilih varian (server menolak `VARIANT_REQUIRED`) |
+| `is_featured` | ✅ Checkbox di admin + badge "Pilihan"; beranda menampilkan produk pilihan saja (fallback produk terbaru bila belum ada). Judul bagian menjadi "Produk Pilihan" |
+| Fallback dummy diam-diam | ✅ Keputusan pemilik: dummy hanya di development; production menampilkan halaman error (`app/error.tsx`) + log. ⚠️ Situs uji workers.dev menampilkan error sampai Skill 24 (D1) |
+| Hero 9 MB | ✅ Dikompres (WebP 188 KB untuk hero, JPEG 145 KB untuk OG). ⏳ **Pemilik:** ganti foto — memuat label merek pihak lain ("SIRUP KURNIA", "Bika Ambon Zulaikha", "Bolu Gulung Meranti") dan watermark AI |
+| PNG mockup di repo | ✅ Dipindah ke `../rasamedan-design/` (di luar repo) |
+| i18n admin | ✅ Keputusan pemilik: admin cukup Bahasa Indonesia — dicatat di CLAUDE.md §4 |
+| Header PRD | ✅ Versi 1.1 |
+| Audit 20.2 — Penting | ✅ Label kategori kustom di detail; normalisasi nomor HP (simpan & cari); kategori default di `db/schema.sql` + form admin tanpa fallback palsu; filter katalog ikut URL; `seed:admin` tidak menimpa akun (`--reset` eksplisit) |
+| Audit 20.2 — Minor diperbaiki | Placeholder reCAPTCHA dikosongkan; zona waktu WIB; PATCH status 404 + error tampil di admin; `seed` dengan pengaman `--force` & transaksi tanpa DDL; pemberitahuan harga berubah di checkout; varian wajib; batas panjang & slug dinormalisasi; escape JSON-LD (juga 21.2 no. 7); dokumen 6 tabel |
+| Batas yang diterima / catatan | Beranda hanya menampilkan produk yang ditandai (tidak dilengkapi sampai 6) — disengaja. Harga di keranjang lama tidak disegarkan otomatis; server selalu menghitung ulang dan layar sukses memberi tahu bila total berubah. **Skill 24:** deteksi 404 PATCH status memakai `affectedRows` (mysql2 = baris cocok) → sesuaikan ke `meta.changes`/cek keberadaan di D1 |
+| Audit 20.2 — Minor terbuka (keputusan konten) | ⏳ Teks Tentang/Kontak/kebijakan pengiriman (`data/site-info.json`) belum ada versi EN — kecualikan seperti deskripsi produk, atau terjemahkan? ⏳ Alamat & jam toko punya dua sumber yang isinya berbeda (`site-info.json` vs env `NEXT_PUBLIC_STORE_*`) + email `halo@rasamedan` tanpa TLD — pemilik memilih satu sumber & data yang benar |
+
 **Acceptance Criteria:**
 - [ ] Setiap skill punya review `code-reviewer` tanpa temuan Kritis/Penting sebelum di-commit
 - [ ] Semua pemeriksaan 20.3 lolos
@@ -565,17 +589,43 @@ transaksi DB, i18n, dan fitur yang diklaim README tetapi tidak terhubung end-to-
 7. **[Rendah] JSON-LD.** Di `components/seo/JsonLd.tsx`, escape `<` (`JSON.stringify(data).replace(/</g, "\\u003c")`) karena nama dan deskripsi produk berasal dari DB.
 8. **[Rendah] Header keamanan** lewat `headers()` di `next.config.mjs` (aman untuk cPanel): `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, dan CSP dasar yang tetap mengizinkan embed Google Maps dan Turnstile.
 9. **[Rendah] Kebersihan repo.** Hapus `scripts/_tmp_dbtest.mjs` dari git. Tambahkan `.claude/settings.local.json` ke `.gitignore`, lalu keluarkan dari git dengan `git rm --cached`.
-10. **[Rendah] Password admin default** (`admin123` dari `npm run seed:admin`) wajib diganti sebelum go-live.
+10. **[Rendah] Password admin default** (`admin123` dari `npm run seed:admin`) wajib diganti sebelum go-live. *(13 Okt 2026: `seed:admin` kini menolak jalan tanpa `ADMIN_PASSWORD` ≥ 12 karakter dan tidak menimpa akun yang ada — akun BARU tidak bisa lagi dibuat dengan password default. Akun lama yang terlanjur memakai `admin123` tetap harus diganti pemilik.)*
 
-### 21.3 Checklist pre-deploy (isi setiap kali deploy)
+### 21.2a Status pengerjaan (13 Okt 2026)
+| No. | Status |
+|---|---|
+| 1 | ✅ Kode: `.env.example` kosong, nilai bocor ditolak (blocklist hash), fail-closed di production; `.env` lokal sudah dirotasi. ⏳ **Pemilik:** rotasi di panel cPanel yang masih live (kode lama di sana masih menerima nilai bocor) + `wrangler secret put ADMIN_SESSION_SECRET` |
+| 2 | ✅ |
+| 3 | ✅ Rate limit atomik, batas input/item/total, varian wajib, JSON-only (415), **Turnstile** di checkout, login, dan cek pesanan (menutup Skill 15). Cek pesanan pindah ke `POST /api/orders/lookup` (nomor HP tidak lagi di URL/log) |
+| 4 | ✅ `lib/client-ip.ts`: `cf-connecting-ip` dipercaya di production hanya bila `TRUST_CF_CONNECTING_IP=1` (var di `wrangler.jsonc` — di Workers header ditimpa edge; `next start` terbuka tanpa Cloudflare tidak memercayainya); IPv4-mapped IPv6 dinormalisasi; XFF tidak pernah dipercaya di production (dev: entri paling kanan); IPv6 dikelompokkan per /64; tanpa IP → ember bersama `noip` (lebih ketat). Analisis proxy cPanel tidak relevan lagi (`main` tidak deploy ke cPanel) |
+| 5 | ✅ `admin_users.session_version` (schema + `npm run db:migrate:session`), dicek di `getAdminSession()` per request, naik atomik saat ganti password. Kolom belum ada → admin ditolak (fail-closed). Bukan pengganti rotasi secret |
+| 6 | ✅ Magic bytes (`lib/image-type.ts`), ekstensi & nama file dari server. `.htaccess` **tidak dikerjakan** (keputusan tercatat): `main` tidak deploy ke cPanel, aset Workers/R2 tidak pernah dieksekusi, dan upload hanya bisa menghasilkan jpg/png/webp/gif. Field `image` produk kini dibatasi ke `/uploads/` & `/images/` |
+| 7 | ✅ (Skill 20) |
+| 8 | ✅ `next.config.mjs`: CSP (Turnstile + iframe peta; `'unsafe-inline'` karena tanpa middleware/nonce), nosniff, Referrer-Policy, X-Frame-Options DENY, Permissions-Policy. HSTS diatur di dashboard Cloudflare saat cutover |
+| 9 | ✅ `_tmp_dbtest.mjs` dihapus (Skill 20); `.claude/settings.local.json` di-ignore & keluar dari git |
+| 10 | ✅ Kode: `seed:admin` wajib `ADMIN_PASSWORD` ≥ 12. ⏳ **Pemilik:** ganti password akun lama bila masih default |
+
+Masih terbuka di skill lain (bukan Skill 21): rate limit in-memory tidak andal antar-isolate Workers → tabel D1 (Skill 28, selesai); hashing scrypt → PBKDF2 (Skill 26, selesai); upload ke R2 (Skill 27, selesai).
+
+### 21.3 Checklist pre-deploy Cloudflare Workers (isi setiap kali deploy)
 - [ ] Audit penuh `security-auditor`: tidak ada temuan Kritis/Tinggi yang masih terbuka
-- [ ] Secret sesi production unik, ≥32 karakter, dan tidak pernah ter-commit
-- [ ] Turnstile aktif dengan key production (bukan test key) dan sudah diuji di server
-- [ ] SSL aktif, dan `NEXT_PUBLIC_SITE_URL` berisi domain https yang asli
-- [ ] Password admin default sudah diganti
-- [ ] `public/uploads` tidak bisa mengeksekusi skrip
-- [ ] `npm audit --omit=dev` tanpa celah tinggi yang relevan
-- [ ] File `.env` tidak ikut ter-upload ke folder publik
+- [ ] **Selama cPanel masih live:** `ADMIN_SESSION_SECRET` di panel Node.js App cPanel sudah diganti nilai acak baru + Restart, password admin cPanel diganti (nilai lama bocor di riwayat git dan masih diterima kode lama)
+- [ ] `ADMIN_SESSION_SECRET` via `wrangler secret put`, ≥32 karakter acak, belum pernah ter-commit, berbeda dari dev; tidak ada rahasia di `vars`/Build variables (guard menolak nama berbau rahasia di `vars`)
+- [ ] Akun Cloudflare: 2FA aktif, anggota & token API minimal (token Workers Builds ditinjau); token R2 S3 API tidak dibuat atau sudah dicabut
+- [ ] Akun registrar domain: 2FA aktif, *registrar/transfer lock* aktif; email pemulihan akun Cloudflare & registrar bukan alamat `@rasamedan.com` yang di-host di cPanel
+- [ ] *(Diisi di Fase F4 — bukan gerbang C0)* Tidak ada record DNS yatim yang menunjuk IP server cPanel setelah hosting dihentikan (DEPLOYMENT §11.5/§11.6)
+- [ ] `TURNSTILE_SECRET_KEY` via `wrangler secret put` + `TURNSTILE_SITE_KEY` di `vars` `wrangler.jsonc`, bukan test key; hostname widget = domain production (+ workers.dev bila staging); `ALLOW_TEST_CAPTCHA` TIDAK ada di `vars` maupun `npx wrangler secret list`; `vars.TRUST_CF_CONNECTING_IP` = "1" (guard memeriksa); login, cek pesanan, checkout diuji di URL deploy
+- [ ] `NEXT_PUBLIC_SITE_URL` = domain https asli **saat build** (`npm run deploy` otomatis menolak localhost/http/site key kosong lewat `scripts/check-deploy-env.mjs`); `npm run cf:build` menampilkan `[strip-bundle-secrets] OK`
+- [ ] Resource Cloudflare: `database_id` D1 asli di `wrangler.jsonc` (deploy menolak placeholder); bucket R2 `rasa-medan-uploads` ada dan **privat** (r2.dev Disabled, tanpa custom domain); `public/uploads` kosong (deploy menolak)
+- [ ] Migrasi DB terbaru diterapkan ke D1 production (`npm run db:migrate:remote`) **sebelum** deploy kode yang membutuhkannya
+- [ ] Admin production dibuat lewat `npm run seed:admin -- --remote` dengan password ≥12 karakter acak (hash cPanel lama tidak berlaku); `NEXT_PUBLIC_WA_NUMBER` nomor asli (deploy memberi peringatan bila dummy)
+- [ ] `curl -I https://<domain>/` menampilkan CSP, nosniff, X-Frame-Options, Referrer-Policy; tidak ada pelanggaran CSP di console (beranda + peta, produk, checkout + widget, cek pesanan, admin)
+- [ ] SSL Cloudflare aktif; HSTS diaktifkan di dashboard (Skill 30)
+- [ ] Aturan WAF Rate Limiting untuk `/api/admin/auth`, `/api/orders`, `/api/orders/lookup` + notifikasi penggunaan Workers/D1 aktif (28a)
+- [ ] Uji asap `DEPLOYMENT.md` §7 lolos di URL deploy (termasuk upload foto, ganti password, checkout besar); `npx wrangler tail` bersih
+- [ ] `npm audit --omit=dev` tanpa celah tinggi yang relevan; bundle Worker ≤ 3 MiB (`npm run cf:dryrun`)
+- [ ] Tidak ada `.env`/`.dev.vars`/`*.sql` data (ekspor, backup D1) di repo atau bundle; `git status` bersih dari file data
+- [ ] Workers Builds (bila dipakai): Build variables hanya `NEXT_PUBLIC_*`/`GOOGLE_SITE_VERIFICATION`, build cabang non-produksi dimatikan
 
 **Acceptance Criteria:**
 - [ ] Butir 21.2 no. 1–3 selesai sebelum go-live
@@ -645,6 +695,17 @@ Kolom `tracking_summary` memakai `TEXT` (bukan `JSON`) agar aman di MySQL maupun
 - PRD: tambah §3.10 "Lacak Pengiriman", dan tegaskan ongkir otomatis tetap di luar cakupan.
 - `DEPLOYMENT.md`: env baru, dan pastikan server boleh request keluar ke `use.api.co.id`.
 
+### 22a — Catatan pelaksanaan jalur cadangan (14 Okt 2026)
+
+- **Alasan dikerjakan sebelum 22.0:** pemilik menunda uji API sampai deployment. Jalur cadangan (22.1–22.3) dipakai di Jalur A maupun B, jadi tidak ada pekerjaan yang terbuang. 22.4 (integrasi API + normalizer) **sengaja belum** dikerjakan: SKILLS melarang menebak nama field respons.
+- **22.1 (D1, bukan MySQL):** `migrations/0003_orders_shipment.sql` — kolom nullable `courier_code`, `waybill`, `shipped_at`, `tracking_summary`, `tracking_checked_at` + index `waybill` (dua kolom tracking disiapkan untuk 22.4). Teks lama 22.1 (`scripts/migrate-add-shipment.mjs`, `db/schema.sql`, tipe MySQL) tidak berlaku lagi sejak Skill 24. **Migrasi 0003 wajib diterapkan ke D1 remote sebelum deploy kode ini** (`npm run db:migrate:remote`), atau Cek Pesanan & admin pesanan error "no such column".
+- **Daftar kurir** `lib/couriers.mjs` (data murni, aman untuk klien): JNE, J&T Express, SiCepat, AnterAja, Pos Indonesia, Ninja Xpress, Lion Parcel, ID Express, "Kurir lain" (tanpa tautan). URL lacak diverifikasi 14 Okt 2026 (HTTP 200 tanpa pengalihan ke beranda), kecuali SiCepat yang formulir lacaknya ada di beranda. Kode kurir masih kode internal — petakan ke kode api.co.id saat 22.4.
+- **22.2 Admin:** `PATCH /api/admin/orders/[id]/shipment` (sesi admin; body harus objek; kurir harus terdaftar; resi 6–40 karakter huruf/angka/"-" dengan minimal satu huruf/angka, disimpan huruf besar; hanya pesanan `kurir`; kosong-kosong = hapus; `shipped_at` diisi saat resi pertama, ringkasan tracking direset bila resi/kurir berganti). `components/admin/ShipmentForm.tsx` di kolom status daftar pesanan; `OrderStatusSelect` memberi **peringatan (bukan blokir)** "Status Dikirim tapi resi belum diisi". Status pesanan tidak diubah endpoint ini.
+- **22.3 Pelanggan — keputusan privasi (temuan audit):** resi membuka lokasi/waktu antar di situs kurir, sedangkan nomor HP mudah diketahui orang lain. Maka `POST /api/orders/lookup` mengirim detail `shipment` (nama kurir, resi, URL lacak) **hanya bila Order ID diisi dan cocok**. Agar Order ID benar-benar menjadi faktor kedua, pencarian dengan nomor HP saja mengembalikan Order ID **tersamar** (`ORD-20261014-••••`) dan tanpa penanda "resi tersedia"; `CheckOrderView` menampilkan petunjuk "Masukkan Order ID …" untuk pesanan kurir berstatus Dikirim/Selesai (status memang sudah terlihat). Catatan: Order ID adalah faktor kedua yang lemah (nomor urut per hari) — tebakan tetap dibatasi captcha + rate limit; perlindungan lebih kuat kelak: token acak per pesanan di pesan WhatsApp. Tidak ada endpoint publik baru. `CheckOrderView` menampilkan resi + tombol Salin + "Lacak di situs kurir ↗" (`rel="noopener noreferrer"`). Teks lewat `locales/id.json`/`en.json` (`checkOrder.shipment`, `waybillNeedsCode`, dst.).
+- **PRD:** §3.10 Lacak Pengiriman ditambahkan (ongkir, pemesanan kurir, dan status otomatis tetap di luar cakupan).
+- **Teruji** (`next dev`): 401 tanpa sesi; kurir tak dikenal, 5 format resi salah, pesanan pickup, dan pesanan tak ada ditolak; resi disimpan (trim + huruf besar); `shipped_at` terisi dan status tidak berubah; pelanggan melihat resi + tautan; pickup tanpa shipment; nomor HP lain tidak melihat resi; ganti resi mempertahankan `shipped_at`; kurir lain tanpa tautan; hapus resi; tampilan 375px admin & Cek Pesanan dicek di browser.
+- **Sisa (setelah 22.0 oleh pemilik):** 22.4 `lib/tracking.ts` (`import "server-only"`, `API_CO_ID_KEY` via `wrangler secret put`, `encodeURIComponent(waybill)`, timeout 8 dtk, cache 30 menit di `tracking_checked_at`, normalizer dari respons asli), 22.5 env & dokumen, AC `grep -r API_CO_ID .open-next/assets` kosong. Pertimbangan: sembunyikan resi untuk pesanan `Selesai` yang sudah lama.
+
 ### 22.6 Review
 `architect` (sebelum coding) → `code-reviewer` (Skill 20) → `security-auditor` (Skill 21). Fokus keamanan: API key tidak bocor ke klien, resi di-encode di URL, dan tidak ada cara melihat resi milik pelanggan lain.
 
@@ -658,4 +719,290 @@ Kolom `tracking_summary` memakai `TEXT` (bukan `JSON`) agar aman di MySQL maupun
 
 ---
 
-*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 23, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*
+# BAGIAN E — Migrasi Infrastruktur ke Cloudflare Workers (Skill 23–30)
+
+Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Keputusan yang sudah diambil (13 Okt 2026):**
+
+- **Database:** Cloudflare **D1** (SQLite via binding) — BUKAN Hyperdrive + MySQL eksternal.
+- **Upload foto:** Cloudflare **R2** — bukan filesystem lokal.
+- **Captcha:** **Cloudflare Turnstile** — sekaligus menutup backlog Skill 15 (dokumen sudah Turnstile, kode masih reCAPTCHA).
+- **Paket:** Workers **Free** (10 ms CPU/request, 100 rb request/hari) — konsekuensi: hashing password memakai **PBKDF2 Web Crypto** (scrypt terlalu berat untuk batas CPU ini).
+
+**Prinsip selama migrasi:**
+
+- Aturan bisnis (`CLAUDE.md` §6) dan PRD **tidak berubah** — yang berubah hanya infrastruktur.
+- `CLAUDE.md` §2 wajib diperbarui di Skill 23; kalau tidak, agent berikutnya akan menolak perubahan Workers karena aturan lama "deployment cPanel".
+- Tiap skill tetap mengikuti "Alur Kerja Setiap Skill" (architect bila mengubah skema/integrasi → implementasi → `tsc` + build → code-reviewer → security-auditor → commit).
+- Urutan eksekusi: **23 → 24 → 26 → 28 → 27 → 25 → 29 → 30** (26 sebelum 28 karena rate limit butuh skema dari 24; 27 sesudah 26 karena upload route memakai auth baru).
+- Selama Skill 23–29 situs production **tetap berjalan di cPanel**; cutover hanya di Skill 30.
+- Skill 22 (tracking resi) dikerjakan **setelah** migrasi, langsung di atas D1.
+
+---
+
+## Skill 23 — Setup Runtime Cloudflare Workers
+
+**Tujuan:** Aplikasi Next.js bisa di-build dan dijalankan di Workers (via `@opennextjs/cloudflare`) tanpa mengubah perilaku; DB dan upload sementara masih menunjuk backend lama.
+
+**Langkah:**
+
+1. **Perbarui `CLAUDE.md` §2 terlebih dahulu:** deployment target → Cloudflare Workers (OpenNext + `nodejs_compat`); database → D1; upload foto → R2. Hapus sub-bab "Batasan Deployment cPanel", ganti dengan batasan Workers: tanpa filesystem persisten, tanpa koneksi TCP langsung, batas CPU free tier 10 ms/request, konfigurasi runtime via binding (`wrangler.jsonc`) + secrets (bukan `.env` di server).
+2. Install dev dependency: `npm i -D @opennextjs/cloudflare wrangler`.
+3. Buat `wrangler.jsonc`: name `rasa-medan`, `compatibility_date` terkini, `compatibility_flags: ["nodejs_compat"]`, binding assets, serta placeholder binding `DB` (D1) dan `UPLOADS` (R2) — ID asli diisi di Skill 24/27.
+4. Buat `open-next.config.ts` (konfigurasi default).
+5. Hapus `server.js`. Update `package.json`: `preview` = `opennextjs-cloudflare build && wrangler dev`, `deploy` = `opennextjs-cloudflare build && wrangler deploy`. Script `dev`/`build` tetap.
+6. `.gitignore`: tambahkan `.open-next/`, `.wrangler/`, `.dev.vars`. Buat `.dev.vars.example` (template secret lokal).
+7. **Pemilik:** buat akun Cloudflare, pindahkan nameserver `rasamedan.com` ke Cloudflare, jalankan `npx wrangler login`.
+8. Deploy uji ke `rasa-medan.workers.dev`; pastikan semua halaman publik ter-render (katalog masih membaca MySQL lokal dan bisa jatuh ke fallback dummy — catat risiko ini di review).
+
+**Acceptance Criteria:**
+
+- [ ] `npm run build` dan `npx opennextjs-cloudflare build` lolos tanpa error
+- [ ] Semua halaman publik render di `*.workers.dev` (cart, toggle bahasa, link WhatsApp berfungsi)
+- [ ] `server.js` terhapus; tidak ada referensi Passenger tersisa di kode
+- [ ] `CLAUDE.md` §2 sudah berbunyi Workers (bukan cPanel)
+- [ ] Review `code-reviewer` (Skill 20.1) bersih dari temuan Kritis/Penting
+
+---
+
+## Skill 24 — Migrasi Database: MySQL → D1
+
+**Tujuan:** Seluruh lapisan data berjalan di atas D1 (SQLite via binding); `mysql2` dan connection pool dihapus total.
+
+**Langkah:**
+
+1. Buat `migrations/0001_init.sql` (dialek SQLite): `ENUM(...)` → `TEXT CHECK (col IN (...))`; `AUTO_INCREMENT` → `INTEGER PRIMARY KEY AUTOINCREMENT`; `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` → `TEXT DEFAULT (datetime('now'))`; `updated_at ON UPDATE` → `CREATE TRIGGER`; `TINYINT(1)` → `INTEGER`; buang `ENGINE/CHARSET`; FK tetap (`ON DELETE CASCADE/SET NULL`); index via `CREATE INDEX`. Sertakan tabel `login_failures(ip TEXT, ts INTEGER)` untuk Skill 28 dan kolom `admin_users.session_version INTEGER NOT NULL DEFAULT 0` untuk Skill 26.
+2. Rewrite `lib/db.ts`: helper `query<T>(sql, params)` → `env.DB.prepare(sql).bind(...params).all()`; `execute()` → `.run()` (baca `meta.last_row_id`, `meta.changes`); helper `batch()` untuk operasi atomik. Akses binding via `getCloudflareContext()` dari `@opennextjs/cloudflare`, plus `initOpenNextCloudflareForLocal()` di `next.config.mjs` agar `next dev` tetap jalan dengan D1 lokal.
+3. Adaptasi semua call site: `lib/products.ts`, `lib/categories.ts`, `lib/orders-db.ts` (perluas `IN (?)` menjadi satu placeholder per elemen), `lib/product-admin.ts` (`replaceVariants` → `batch()`), dan semua route di `app/api/**`: ganti `beginTransaction/commit/rollback` dengan `batch()` (insert order + items tetap atomik), `insertId` → `meta.last_row_id`, `affectedRows` → `meta.changes`, hapus tipe `RowDataPacket`.
+4. Hapus dependensi `mysql2` dari `package.json`.
+5. Generate tipe binding: `npx wrangler types` → referensikan di `cloudflare-env.d.ts`.
+6. **Pemilik:** `npx wrangler d1 create rasamedan` lalu salin `database_id` ke `wrangler.jsonc`; jalankan migrasi lokal: `npx wrangler d1 migrations apply rasamedan --local`.
+
+**Acceptance Criteria:**
+
+- [ ] `npx tsc --noEmit` dan `npm run build` lolos
+- [ ] Katalog, detail produk, checkout (order + items tersimpan atomik), cek pesanan, dan CRUD admin berfungsi di D1 lokal
+- [ ] Tidak ada string `mysql` di `lib/` dan `app/`; `mysql2` hilang dari `package.json`
+- [ ] Review `code-reviewer` bersih; `security-auditor` memeriksa ulang semua query (parameterized, tanpa injection)
+
+---
+
+### 24a — Catatan pelaksanaan (14 Okt 2026)
+
+- **Skema:** `migrations/0001_init.sql` sesuai langkah 1, ditambah: waktu = teks ISO-8601 UTC (`strftime('%Y-%m-%dT%H:%M:%SZ','now')`, bisa langsung `new Date()`); `COLLATE NOCASE` pada username, slug, kategori, nama, `order_code` (paritas collation `utf8mb4_general_ci` MySQL: login "ADMIN" = "admin", cek Order ID huruf kecil tetap cocok); CHECK untuk enum, boolean, dan angka non-negatif; trigger `updated_at`. Kategori awal (kue/kering/sirup) ikut di 0001. Tabel rate limit bernama `login_failures(bucket TEXT, ts INTEGER)` — `bucket` = kunci rate limit (mis. `login:<ip>`, `checkorder:<ip>`), bukan IP mentah, karena dipakai untuk login **dan** cek pesanan/checkout (Skill 28).
+- **`lib/db.ts`:** `query`, `queryIn` (memecah `IN` per 90 id — D1 menolak >100 parameter per query; teruji katalog 150 produk), `execute` (`changes`/`lastRowId`), `statement` + `batch` (atomik), `isUniqueViolation`, `dbErrorMessage` (log ringkas tanpa parameter).
+- **Atomik:** checkout = 1 `batch` berisi **2 statement** berapa pun jumlah baris: INSERT order, lalu INSERT item via `json_each(?)` dari JSON yang dibangun server (paket Free D1 membatasi 50 query per invocation Worker; 1 INSERT per item akan gagal untuk keranjang besar). Jumlah item tersimpan diverifikasi; retry nomor urut (maks 5) saat UNIQUE bentrok; nomor urut berikutnya = `MAX(CAST(substr(...)))` (benar juga di atas 9999). Produk baru/ubah = 1 `batch` (produk + hapus/isi varian). Teruji: item gagal CHECK → order ikut batal.
+- **`next dev`:** `initOpenNextCloudflareForDev()` di `next.config.mjs` (hanya NODE_ENV=development); `next dev` dan `npm run preview` berbagi D1 lokal `.wrangler/state`.
+- **Tipe:** `npm run cf:typegen` = `wrangler types --include-runtime=false` (+ nama secret dari `.dev.vars.example`), ditambah `types/cloudflare-runtime.d.ts` (subset D1). Runtime types lengkap sengaja tidak dipakai: menimpa tipe DOM (`Response.json()` → `unknown`) sehingga komponen client gagal type-check.
+- **`wrangler.jsonc`:** binding `DB` aktif dengan `database_id` placeholder (nol semua) — cukup untuk lokal; `scripts/check-deploy-env.mjs` menolak deploy sampai diganti id asli.
+- **Skrip:** `seed`/`seed:admin` ditulis ulang via `wrangler d1 execute` (`scripts/lib/d1.mjs`; default lokal, `--remote` eksplisit). Skrip khusus MySQL dihapus (`test-db`, `apply-schema`, `migrate-add-weight`, `migrate-session-version`, `repair-order-items`, `seed-categories`); `db/schema.sql` diarsip ke `docs/legacy/schema-mysql.sql`. `@opennextjs/cloudflare` dipindah ke `dependencies` (dipakai runtime oleh `lib/db.ts`).
+- **Perilaku baru kecil:** kata kunci pencarian pesanan admin disaring ke huruf/angka/"-" dan maks 24 karakter (D1 menolak pola LIKE >50 byte; wildcard `%`/`_` tidak bisa dipakai); PUT produk yang id-nya tidak ada → 404 (dulu 500, juga bila terhapus bersamaan); `npm run seed` ke `--remote` ditolak (data dummy hanya lokal); log error DB disaring (`dbErrorMessage` membuang nilai dari `D1_TYPE_ERROR`); id route admin wajib bilangan bulat > 0; nama kategori ≤100 saat rename.
+- **Belum bisa diuji lokal (cek saat deploy uji workers.dev):** batas D1 remote yang tidak ditegakkan miniflare — 50 query/invocation (checkout 50 baris), pola LIKE ≤50 byte (pencarian admin). Timing login username tak dikenal (tanpa hashing) dicatat untuk Skill 26.; urutan tie-break `id DESC` pada daftar pesanan.
+
+## Skill 25 — Migrasi Data & Seed
+
+> **Catatan dari Skill 24:** `mysql2` sudah dihapus dari `package.json`. Untuk `scripts/export-mysql.mjs` (langkah 1) pasang sementara tanpa menyimpan (`npm i --no-save mysql2`) atau ekspor via phpMyAdmin/`mysqldump` lalu konversi. Kategori awal sudah ada di `0001_init.sql` (pakai `INSERT OR IGNORE` agar impor data production tidak bentrok). `npm run seed`/`seed:admin` sudah memakai D1 (langkah 2–3 sebagian selesai). Kolom waktu wajib dikonversi ke format `YYYY-MM-DDTHH:MM:SSZ` (UTC) — timestamp MySQL lama tersimpan dalam zona waktu server cPanel, jadi konversi ke UTC harus memakai zona itu.
+
+**Tujuan:** Data production dari MySQL berpindah utuh ke D1; data dummy bisa di-seed ulang tanpa script Node.
+
+**Langkah:**
+
+1. Buat `scripts/export-mysql.mjs`: dump `categories`, `products`, `product_variants`, `admin_users` (dan `orders` + `order_items` bila production sudah berisi) menjadi satu file SQL dialek SQLite (escape string dengan benar, boolean → 0/1, timestamp → string ISO).
+2. Konversi `scripts/seed*.mjs` menjadi file migrasi (`migrations/0002_seed_categories.sql`, dst.) yang dibangkitkan dari `data/dummy-products.json`.
+3. `package.json`: `db:migrate` = `wrangler d1 migrations apply rasamedan --local` / `--remote`; `db:export` = script langkah 1. Hapus script `mysql2` lama yang sudah tidak dipakai.
+4. Uji import ke D1 lokal; verifikasi jumlah baris per tabel sama dengan sumber dan `order_code` tetap unik.
+5. **Catatan password admin:** hash lama berformat scrypt tidak kompatibel dengan PBKDF2 (Skill 26) dan tidak bisa di-rehash tanpa plaintext. Langkah migrasi data wajib menyertakan reset password admin (pemilik memilih password baru, dibuat lewat seed-admin versi Skill 26).
+
+**Acceptance Criteria:**
+
+- [ ] Data production terimport utuh (jumlah baris per tabel cocok)
+- [ ] Produk lama tetap tampil di katalog; pesanan lama tetap bisa dicek via nomor HP
+- [ ] Seed dummy bisa dijalankan ulang via `wrangler d1 execute --file` tanpa error
+- [ ] Ada catatan jelas langkah reset password admin saat cutover
+
+---
+
+### 25a — Catatan pelaksanaan (14 Okt 2026)
+
+- **Ekspor** `npm run db:export` (`scripts/export-mysql.mjs`; pasang dulu `npm i --no-save mysql2`, kredensial `DB_*` dari `.env`): categories (upsert per slug — kategori awal sudah dari 0001), products, product_variants, orders, order_items dengan **id asli**. Hasil ke `db-export/` (di-gitignore, mode 0600 — berisi data pribadi pelanggan; hapus setelah impor terverifikasi). Manifest jumlah baris ditulis di kepala file.
+- **Waktu:** sesi MySQL di-set `+00:00` + mysql2 `timezone: "Z"` → TIMESTAMP terbaca UTC apa pun zona waktu server cPanel → `YYYY-MM-DDTHH:MM:SSZ`. Teruji pada server +07:00: 07:30 WIB → `00:30:00Z`.
+- **Validasi saat ekspor:** status/stok/metode harus nilai baku (sesuai CHECK D1), angka bulat ≥ 0, boolean → 0/1; data menyimpang membatalkan ekspor dengan pesan jelas (bukan impor setengah jadi).
+- **Nomor HP dinormalisasi** ke `08…` (`lib/phone.mjs`, kini .mjs agar dipakai skrip) bila hasilnya valid — pesanan lama yang tersimpan "6281…"/"+62…" sebelum normalisasi kini ditemukan Cek Pesanan dengan format apa pun (teruji 4 format). Nomor tak valid disimpan apa adanya.
+- **admin_users tidak diekspor** (langkah 5): hash scrypt tidak bisa dipakai login di Workers (Skill 26) → saat cutover pemilik membuat admin baru: `ADMIN_PASSWORD='<≥12 karakter acak>' npm run seed:admin -- --remote`.
+- **Impor** `npm run db:import -- --file <file> [--remote]` (`scripts/import-d1.mjs`): menolak bila tabel data D1 tujuan sudah berisi; sesudah impor mencocokkan jumlah baris tiap tabel dengan manifest, `order_code` unik, dan `PRAGMA foreign_key_check` kosong. Impor file remote D1 tidak dijamin atomik → perintah pengosongan ada di kepala skrip.
+- **Seed dummy** (langkah 2, **menyimpang dari teks langkah**): bukan file di `migrations/` — migrasi juga diterapkan ke production, padahal data dummy tidak boleh ke production. Gantinya `db/seed/dummy-products.sql` (dibangkitkan `npm run seed:sql` dari JSON, hanya mengganti produk dummy berdasarkan id/slug, aman diulang; teruji 2× berturut-turut) dan `npm run seed` (lokal saja). Logika bersama di `scripts/lib/dummy-seed.mjs`. Kategori awal tetap di `0001_init.sql`.
+- **Dari review/audit:** ekspor dalam satu `START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY` (tidak ada item yatim walau situs lama masih menerima pesanan — tetap bekukan situs saat ekspor final); produk berkategori yatim menghentikan ekspor; koneksi gagal → pesan rapi. **Keamanan data:** `DB_HOST` wajib localhost/SSH tunnel (`ssh -L 3307:localhost:3306 …`), host jauh hanya dengan `--allow-remote-host` + TLS terverifikasi; `--out` hanya di `db-export/`; string ditulis `CAST(X'<hex>' AS TEXT)` (kebal pemecah statement & heuristik wrangler yang menghapus "BEGIN TRANSACTION;"/"COMMIT;" di mana pun — teruji 18+ payload oleh auditor dan payload `'); DROP TABLE`/manifest palsu di uji); NUL byte dibuang & dihitung; statement > 90 KB ditolak saat ekspor; normalisasi HP hanya untuk hasil `08…` (telepon rumah "622…" tidak jadi "022…"; trade-off: pesanan lama bernomor telepon rumah berformat internasional, mis. "+62 21…", hanya ditemukan bila pelanggan mengetik format yang sama — sangat jarang untuk toko ini); impor menjalankan file ekspor langsung (tanpa salinan PII di %TEMP%) dan menambah cek baris yatim eksplisit selain PRAGMA. **Seed dummy** menghapus berdasarkan slug saja dan diawali penjaga `_seed_guard` (CHECK) yang membuat file gagal tanpa mengubah apa pun bila D1 berisi produk non-dummy ATAU tidak bertanda lokal — penanda tabel `_local_dev` dibuat `npm run db:migrate` (lokal saja), sehingga D1 production yang masih kosong pun ditolak (teruji keduanya). Sisa `_seed_guard` kosong bisa tertinggal bila penjaga gagal — tidak berbahaya, dicek saat cutover. **Backlog → selesai (14 Okt 2026):** `normalizePhone` kini menganggap "62" kode negara hanya bila ada "+"/"00" atau diikuti 8 (seluler); "622 1234567" → "06221234567" (bukan "022…"). Tidak perlu pencocokan "aturan lama": kode cPanel live (`fb4ea12`) tidak pernah menormalisasi nomor (aturan lama hanya ada di `main` yang belum di-deploy) dan ekspor hanya menormalisasi nomor 08… — pesanan cPanel tetap ditemukan lewat input apa adanya (`phone IN (norm, raw)`). Trade-off: "6221…" tanpa "+" (Jakarta, format internasional tanpa plus) kini dibaca sebagai "06221…" — sangat jarang untuk toko ini. Nomor luar negeri (+1…, 0044…) kini ditolak sebagai tidak valid (dulu "diperbaiki" jadi 01…).
+- **package.json:** `db:export`, `db:import`, `seed:sql`; `engines.node >=20.6` (`--env-file`). Skrip mysql2 lama sudah dihapus sejak Skill 24.
+- **Teruji end-to-end** dengan MariaDB 10.4 (XAMPP, instance sementara port 3307, zona +07:00) berisi data "rewel" (kutip, backslash, `-- komentar`, `;`, emoji, newline, NULL, item yang produknya sudah dihapus): ekspor → impor ke D1 lokal baru → seluruh baris identik dengan sumber (dibandingkan per kolom), impor ulang ditolak, katalog/detail/admin pesanan menampilkan data impor, waktu tampil WIB, id produk baru melanjutkan id impor.
+
+## Skill 26 — Rewrite Auth untuk Workers
+
+> **Sudah dikerjakan di Skill 21 (13 Okt 2026):** langkah 2 bagian `session_version` (payload `ver`, cek di `getAdminSession()`, naik saat ganti password), langkah 3 (fallback secret dihapus), dan langkah 6 (`lib/client-ip.ts` memakai `cf-connecting-ip`). Sisa skill ini: PBKDF2 Web Crypto + HMAC via `crypto.subtle`, seed-admin versi D1.
+
+**Tujuan:** Auth admin berjalan dalam batas CPU Workers Free, tanpa `node:crypto` scrypt — sekaligus menutup temuan Skill 21.2 no. 2, 4, dan 5.
+
+**Langkah:**
+
+1. Rewrite `lib/auth.ts` menjadi async penuh: `hashPassword`/`verifyPassword` memakai **PBKDF2-SHA256** via `crypto.subtle.deriveBits` (iterasi default 100.000; bila login kena batas CPU free tier, turunkan ke ±30.000 dan catat keputusannya di komentar); format tersimpan `pbkdf2:iter:salt:hash`; verifikasi memakai perbandingan XOR konstan-waktu.
+2. Token sesi: HMAC-SHA256 via `crypto.subtle` (sign/verify async); sertakan `session_version` dari `admin_users` ke payload dan cocokkan di `getAdminSession()`; naikkan nilainya saat password diganti (menutup 21.2 no. 5 — sesi perangkat lain ikut tercabut).
+3. **Hapus fallback** `"dev-insecure-secret-change-me"` (21.2 no. 2): tanpa `ADMIN_SESSION_SECRET` ≥ 32 karakter di production, login ditolak.
+4. Update semua call site sync → async: `app/api/admin/auth`, `app/api/admin/account`, `app/api/admin/upload`, `app/admin/(protected)/layout.tsx`, `app/admin/login/page.tsx`.
+5. `scripts/seed-admin` versi baru: hashing via Web Crypto di Node lokal, menghasilkan SQL `INSERT` untuk D1 (dipakai juga untuk reset password di Skill 25).
+6. Sumber IP untuk rate limit: gunakan header `cf-connecting-ip` (diisi Cloudflare, tidak bisa dipalsukan klien) — menutup 21.2 no. 4.
+
+**Acceptance Criteria:**
+
+- [ ] Login, logout, dan ganti password berfungsi; setelah ganti password semua sesi lain tercabut
+- [ ] Tanpa secret (atau secret < 32 karakter) di production, login ditolak — bukan memakai default
+- [ ] Password baru di DB berformat `pbkdf2:...` (bukan scrypt)
+- [ ] `security-auditor` (Skill 21.1) bersih dari temuan Kritis/Tinggi
+
+---
+
+### 26a — Catatan pelaksanaan (14 Okt 2026)
+
+- **`lib/password.mjs`** (JS murni Web Crypto, dipakai aplikasi DAN `scripts/seed-admin.mjs` — satu sumber format): PBKDF2-SHA256, salt 16 byte, hash 32 byte, format `pbkdf2:<iter>:<saltHex>:<hashHex>`, perbandingan XOR waktu-konstan. Iterasi tersimpan di hash; iterasi di luar 1–100.000 (batas PBKDF2 Workers) atau format lain ditolak.
+- **Iterasi = 30.000**, bukan 100.000: terukur ±5,4 ms vs ±16 ms per hash (melewati 10 ms CPU Free). Kompensasi: Turnstile + rate limit login, password baru minimal **12** karakter (halaman Pengaturan, semula 8; sama dengan `seed:admin`). Bila pindah paket berbayar, naikkan `PBKDF2_ITERATIONS` — hash lama di-upgrade otomatis saat login (`needsRehash`, tanpa menaikkan `session_version`). Catatan: login yang memicu upgrade menjalankan PBKDF2 dua kali (±2× CPU) — sekali per admin per kenaikan iterasi; naikkan iterasi bersamaan dengan pindah ke paket berbayar.
+- **`lib/auth.ts`** async penuh tanpa `node:crypto`: token `payload.sig` base64url, HMAC-SHA256 `crypto.subtle.sign/verify` (verify waktu-konstan), CryptoKey di-cache per nilai secret (dibuat lazy di request); token >1 KB / bagian ekstra ditolak; secret tidak valid di production → `getAdminSession` null dan login 500 (fail-closed).
+- **Anti-enumerasi timing:** username tak dikenal tetap menjalankan PBKDF2 terhadap hash dummy (`verifyLogin`) — terukur ±28 ms keduanya (menutup catatan audit Skill 24). Berlaku juga untuk akun dengan hash tak dikenali (scrypt lama) — tetap di-hash dummy.
+- **Hash scrypt era cPanel ditolak** (tanpa fallback scrypt): login gagal + log petunjuk `npm run seed:admin -- --reset`. Konsekuensi untuk Skill 25/30: password admin dibuat ulang saat cutover (sudah direncanakan di Skill 25 langkah 5).
+- **Teruji:** unit test format/verify/salah/salt unik/hash lama/iterasi tak wajar/upgrade; 6 jenis token palsu ditolak; upgrade hash 1.000 → 30.000 saat login tanpa memutus sesi; password baru 11 karakter ditolak; E2E 54 skenario lolos di `next dev` dan preview workerd; preview dengan secret pendek → login 500.
+- **Dari audit:** upgrade hash saat login memakai compare-and-swap (`WHERE password_hash = <hash yang dibaca>`) agar login dengan password lama tidak bisa menimpa password yang baru diganti; iterasi di hash wajib angka desimal 1–6 digit; tebakan "password saat ini" di Pengaturan dibatasi 5 salah / 15 menit per akun (sejak Skill 28 tersimpan di D1 seperti login).
+- **Wajib diuji di workers.dev (Skill 29/30):** ganti password = 2× PBKDF2 (±10 ms CPU, pas di batas Free); bila sering "Exceeded CPU", turunkan iterasi sedikit (mis. 25.000) atau terima dan catat. Risiko diterima: bila isi D1 bocor, cracking offline lebih murah dari rekomendasi OWASP (600k) — pertahanannya password admin ≥12 karakter acak.
+- `package.json` `engines.node >=20` (`crypto` global dipakai `lib/password.mjs` di skrip Node).
+- Sisa `node:crypto`: hanya `randomBytes` untuk nama file di `app/api/admin/upload/route.ts` (murah; route ini ditulis ulang di Skill 27).
+
+## Skill 27 — Upload Foto: Disk → R2
+
+> **Sudah dikerjakan di Skill 21:** validasi magic bytes (`lib/image-type.ts`, portabel). Sisa skill ini: penyimpanan R2 + route GET `/uploads/[...path]`.
+
+**Tujuan:** Foto produk disimpan di R2 (persisten), bukan di filesystem — sekaligus menutup temuan Skill 21.2 no. 6 (validasi magic bytes).
+
+**Langkah:**
+
+1. **Pemilik:** buat R2 bucket `rasa-medan-uploads`; isi binding `UPLOADS` di `wrangler.jsonc`.
+2. Rewrite `app/api/admin/upload/route.ts`: validasi **magic bytes** (JPEG/PNG/WEBP/GIF — jangan percaya `file.type`) + ukuran maks 2 MB; simpan via `env.UPLOADS.put("uploads/<nama-file>", bytes)`; kolom `products.image` tetap menyimpan path `/uploads/<nama-file>` seperti sekarang.
+3. Route baru `app/uploads/[...path]/route.ts` (GET publik, header cache `immutable`) melayani objek dari R2 — path lama `/uploads/x.jpg` tidak berubah sehingga **tidak perlu migrasi data** kolom `image`.
+4. Migrasi file: unggah seluruh isi `public/uploads/` ke R2 (`wrangler r2 object put` per file atau skrip kecil).
+5. Putuskan perilaku dev lokal (tulis ke disk lokal seperti sekarang, atau wajib R2 lokal via miniflare) dan dokumentasikan di `README.md`.
+6. (Opsional, fase lanjut) custom domain `cdn.rasamedan.com` untuk bucket agar penyajian gambar tidak memakan kuota request Workers.
+
+**Acceptance Criteria:**
+
+- [ ] Upload dari dashboard menampilkan foto baru lewat URL `/uploads/...` yang dilayani R2
+- [ ] Semua foto produk lama tetap tampil
+- [ ] File non-gambar ditolak walau `file.type` dimanipulasi (magic bytes diperiksa)
+- [ ] Tidak ada `node:fs` tersisa di `app/api/`
+
+---
+
+### 27a — Catatan pelaksanaan (14 Okt 2026)
+
+- **Binding** `UPLOADS` → bucket `rasa-medan-uploads` aktif di `wrangler.jsonc`. Lokal (`next dev`, preview, skrip) memakai R2 tiruan miniflare di `.wrangler/state` — **keputusan langkah 5: dev lokal juga R2 (lokal)**, tidak ada jalur tulis disk, sehingga perilaku dev = production. Deploy gagal dengan pesan jelas dari wrangler bila bucket belum dibuat.
+- **Upload** (`app/api/admin/upload/route.ts`): `Content-Length` > 2 MB + overhead ditolak sebelum body dibaca; ukuran dicek ulang dari isi; magic bytes (`lib/image-type.mjs`, kini .mjs agar dipakai juga oleh skrip Node); nama `<epoch>-<12 hex>.<ext>` dari `crypto.getRandomValues` (tanpa `node:crypto`); `httpMetadata.contentType` dari hasil deteksi server. Kunci R2 `uploads/<nama>`, respons `url: /uploads/<nama>` — format kolom `products.image` tidak berubah.
+- **Penyaji** `app/uploads/[...path]/route.ts`: segmen path divalidasi (`lib/uploads.ts`: `[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}`, maks 5 segmen → tanpa traversal/dotfile); hanya jpeg/png/webp/gif disajikan inline, objek bertipe lain (mis. diunggah manual) `application/octet-stream` + `attachment`; `Cache-Control: public, max-age=31536000, immutable`, `ETag` + 304, `nosniff`.
+- **Migrasi foto lama** (langkah 4): `npm run uploads:r2 -- --dir <folder> [--remote] [--dry-run]` — hanya gambar valid bernama aman (aturan segmen sama dengan route); SVG/PHP menyamar/nama berspasi dilewati dengan peringatan. Untuk cutover (Skill 30): unduh `public/uploads` dari cPanel lalu jalankan dengan `--remote`.
+- **Dari audit:** `public/uploads/` dihapus dari repo (diabaikan git) dan `npm run deploy` ditolak bila folder itu berisi file; `public/.assetsignore` (`uploads/*`) ikut tersalin ke direktori aset sehingga file nyasar tidak pernah tersaji sebagai aset statis yang mendahului route R2 (teruji: `stray.html` → 404); `uploads:r2` mewajibkan `--dir` di luar `public/` dan melewati symlink; upload menolak `Origin` lintas situs (403) dan request tanpa `Content-Length` (411 — di wrangler dev/edge body sudah ber-panjang, teruji di `next dev`); `If-None-Match` mendukung daftar & ETag lemah; validasi `image` produk memakai aturan path yang sama dengan route (`lib/upload-path.mjs`, dipakai juga skrip). Bucket R2 wajib tetap privat (r2.dev/public URL nonaktif).
+- **Uji asap setelah deploy pertama (Skill 29/30):** unggah foto dari dashboard production (pastikan tidak ada 411 palsu lewat edge asli) dan cek bucket di dashboard: r2.dev/public URL **Disabled**.
+- **Backlog → selesai (14 Okt 2026):** respons 200 penyaji disimpan di cache edge (`caches.default` lewat `waitUntil`); kunci cache = path tanpa query (`?acak` tidak bisa memaksa baca R2); 304 juga dilayani dari cache; 404 tidak di-cache (Next menimpa jadi `no-store`). Teruji di preview workerd: setelah objek R2 dihapus, foto tetap tersaji dari cache. Catatan: Cache API no-op di `*.workers.dev`, efektif setelah custom domain (Skill 30). Konsekuensi: foto yang dihapus dari R2 tetap tersaji dari cache edge sampai tergusur (sejalan dengan `immutable` 1 tahun) — prosedur menarik foto bermasalah ada di `DEPLOYMENT.md` §10 (ganti foto, hapus objek R2, purge URL). Kunci cache = kunci objek tervalidasi (variasi encoding URL tidak memecah cache). Sisa hardening opsional: rate limit jumlah upload per sesi; rapikan objek R2 yatim.
+- **Belum dikerjakan (sengaja):** objek R2 lama tidak dihapus saat foto produk diganti/produk dihapus (file yatim kecil, aman; bisa dirapikan nanti). Langkah 6 opsional (custom domain `cdn.rasamedan.com` agar gambar tidak memakan kuota request Worker) — pertimbangkan bila kuota 100 rb request/hari mendekati batas.
+- **Teruji** (`next dev` + preview workerd): upload PNG → URL → GET 200 isi identik, cache/ETag/304, tanpa sesi 401, PHP-menyamar-PNG/SVG/>2 MB ditolak, foto hasil skrip migrasi (termasuk subfolder) tersaji, objek `text/html` tersaji sebagai attachment, 6 path jahat → 404/400, produk dengan foto R2 tampil di halaman detail; E2E 54 skenario tetap lolos.
+
+## Skill 28 — Turnstile & Rate Limit di D1
+
+> **Sudah dikerjakan di Skill 21:** langkah 1, 2, dan 4 (Turnstile di login, cek pesanan, checkout; batas input/item; rate limit checkout). Sisa skill ini: langkah 3 — rate limit pindah dari memori ke tabel D1 `login_failures`. Kunci yang wajib ikut dipindah: `login:*`, `checkorder:*`, `order:*`, `ordercaptcha:*`, dan `account:*` (tebakan password saat ini di Pengaturan, Skill 26; per akun + IP).
+
+**Tujuan:** Menutup backlog Skill 15 (kode masih reCAPTCHA) dan menyelesaikan hardening checkout (Skill 21.2 no. 3) di atas infrastruktur Cloudflare.
+
+**Langkah:**
+
+1. Ganti `lib/recaptcha.ts` → `lib/turnstile.ts`: verifikasi server ke `https://challenges.cloudflare.com/turnstile/v0/siteverify` memakai secret dari binding/env; IP client dari `cf-connecting-ip`.
+2. `components/admin/LoginForm.tsx` + `app/admin/login/page.tsx`: ganti widget reCAPTCHA dengan Turnstile (`https://challenges.cloudflare.com/turnstile/v0/api.js`). Env `RECAPTCHA_*` dihapus, diganti `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`.
+3. Rewrite `lib/rate-limit.ts` ke tabel `login_failures` (dari Skill 24) — pertahankan API `{limited, retryAfterSec}`; berlaku untuk login **dan** cek pesanan; tahan restart (tersimpan di D1, bukan memori).
+4. Checkout `POST /api/orders`: tambahkan verifikasi Turnstile, rate limit 10 pesanan/jam/IP, batas panjang input (nama ≤100, alamat ≤500, catatan ≤500 karakter) dan batas isi (≤50 baris item, qty ≤99 per baris) — sesuai 21.2 no. 3.
+5. **Pemilik:** daftarkan site key Turnstile untuk domain `rasamedan.com` di dashboard Cloudflare.
+6. Perbarui tabel status baris Skill 15 setelah skill ini selesai.
+
+**Acceptance Criteria:**
+
+- [ ] Login, cek pesanan, dan checkout menolak token kosong saat Turnstile dikonfigurasi; verifikasi dilakukan di server
+- [ ] Lockout setelah 5 kegagalan/15 menit tetap bekerja setelah restart Worker
+- [ ] Checkout palsu tanpa token ditolak; batas input & item ditegakkan
+- [ ] Tidak ada referensi `recaptcha` tersisa di kode
+- [ ] `security-auditor` bersih
+
+---
+
+### 28a — Catatan pelaksanaan (14 Okt 2026)
+
+- **`lib/rate-limit.ts`** ditulis ulang di atas tabel `login_failures(bucket, ts)` (dari `0001_init.sql`); API tetap (`checkRateLimit`, `consumeRateLimit` → `{limited, retryAfterSec, stamp}`, `refundRateLimit`, `resetRateLimit`), kini async. `recordFailure` (tak terpakai) dihapus.
+- **Atomik tanpa transaksi eksplisit:** `consume` = batch [hapus catatan kunci itu yang keluar jendela, `INSERT … SELECT … WHERE (SELECT COUNT(*) …) < max`]. D1 menjalankan statement tulis satu per satu, jadi burst paralel tidak bisa melewati batas. `stamp` = `"<rowid>:<ts>"` → refund menghapus tepat satu baris (`rowid` + `bucket` + `ts` harus cocok; rowid bisa dipakai ulang karena tabel tanpa AUTOINCREMENT). D1 error saat check di checkout tampil sebagai 429 "terlalu banyak pesanan" (fail-closed; pesan kurang tepat tapi diterima). Komentar `0001_init.sql` yang menyebut "masih in-memory" sengaja tidak diubah (migrasi sudah diterapkan).
+- **Kebersihan tabel:** catatan kunci yang dipakai dipangkas setiap consume; 2% consume juga menghapus maks 500 catatan > 24 jam milik semua kunci (IP yang tidak kembali), memakai index `(ts)` dari `migrations/0002_login_failures_ts.sql` — tanpa index itu sweep memindai seluruh tabel dan penyerang dengan banyak IP bisa menghabiskan kuota rows read D1 Free (temuan Sedang audit). Sweep di-await (Workers bisa memutus promise yang belum selesai).
+- **Kuota D1 (wajib saat deploy, tugas pemilik):** setiap percobaan login/cek pesanan/checkout menulis 1 catatan sebelum captcha diperiksa, jadi banjir request dari banyak IP tetap memakan kuota tulis D1 Free (100 rb baris/hari). Pasang **1 aturan WAF Rate Limiting** (gratis) di dashboard Cloudflare untuk `/api/admin/auth`, `/api/orders`, `/api/orders/lookup` agar banjir diblok di edge sebelum Worker/D1, dan aktifkan notifikasi penggunaan Workers/D1. Masuk checklist Skill 29/30.
+- **Gagal tertutup:** D1 error saat check/consume → dianggap terkunci (retry 60 dtk); refund/reset gagal → hanya log. Operasi yang dilindungi juga butuh D1, jadi tidak ada fungsi yang hilang.
+- **Kunci:** `login:<ip>`, `checkorder:<ip>`, `order:<ip>` (10/jam), `ordercaptcha:<ip>` (30/jam), `account:<adminId>:<ip>` (per akun DAN jaringan: pencuri cookie tidak bisa mengunci admin asli dari ganti password — satu-satunya cara di UI mencabut sesi curian; jalur darurat: `npm run seed:admin -- --remote --reset`). Trade-off yang disengaja: pemegang cookie curian dengan banyak IP bisa menebak password saat ini lebih dari 5×/15 mnt; batas global per akun tidak dipakai karena justru mengembalikan celah penguncian admin asli. Risiko kecil: butuh cookie sesi valid, dan password admin ≥12 karakter. **Backlog → selesai (14 Okt 2026):** `PUT /api/admin/account` kini wajib Turnstile (action `account`), diverifikasi setelah rate limit dan SEBELUM cek password (urutan sama dengan login; 503 mengembalikan jatah); `AccountSettingsForm` memakai `CaptchaWidget` (pesan Indonesia, reset token setiap submit) — tebakan multi-IP dengan cookie curian kini butuh satu captcha per percobaan (teruji: tanpa token 400 `CAPTCHA_REQUIRED`). IP v6 dikelompokkan per /64 (`lib/client-ip.ts`).
+- **Biaya query:** +1–3 query per request terlindungi (checkout total ±12, jauh di bawah 50/invocation Free).
+- **Teruji:** E2E 54 skenario di `next dev` + preview workerd; burst 20 login salah paralel → tepat 5 tercatat, 15 ditolak 429 (dua runtime); kunci tetap berlaku setelah server di-restart (429 meski password benar); `grep -ri recaptcha` di kode kosong.
+
+## Skill 29 — Environment, Config & Build CI
+
+**Tujuan:** Konfigurasi production rapi (vars vs secrets), deploy otomatis dari GitHub, dan dokumentasi deploy akurat — menutup temuan Skill 21.2 no. 1.
+
+**Langkah:**
+
+1. Pisahkan konfigurasi: `NEXT_PUBLIC_*` di `vars` pada `wrangler.jsonc` (di-inline **saat build** — wajib diisi sebelum `opennextjs-cloudflare build`); secrets (`ADMIN_SESSION_SECRET`, `TURNSTILE_SECRET_KEY`, dan `API_CO_ID_KEY` untuk Skill 22 nanti) via `wrangler secret put`.
+2. Tulis ulang `.env.example`: hapus `DB_*` MySQL dan `RECAPTCHA_*`; tambah `TURNSTILE_*`; beri catatan bahwa konfigurasi production hidup di wrangler/dashboard, bukan `.env` server.
+3. **Rotasi `ADMIN_SESSION_SECRET`** (21.2 no. 1 — nilai lama pernah ter-commit di riwayat git): generate baru (`openssl rand -hex 32`), pasang via `wrangler secret put`, dan ganti nilai di `.env.example` menjadi placeholder.
+4. Aktifkan **Workers Builds** (integrasi GitHub: push ke `main` → build + deploy otomatis), atau bila tidak tersedia, dokumentasikan deploy manual `npm run deploy`.
+5. Tulis ulang `DEPLOYMENT.md` untuk Cloudflare; pindahkan versi cPanel ke `docs/legacy/DEPLOYMENT-cpanel.md`.
+6. Update `README.md` §2 (tech stack) dan §8 (deploy) sesuai kondisi baru.
+7. Sesuaikan checklist Skill 21.3 untuk Cloudflare (SSL otomatis, uploads di R2 — bucket `rasa-medan-uploads` sudah dibuat, tanpa `.htaccess`).
+8. **Pemilik:** pasang 1 aturan WAF Rate Limiting (paket Free) untuk `/api/admin/auth`, `/api/orders`, `/api/orders/lookup`, dan notifikasi penggunaan Workers/D1 — melindungi kuota harian D1 dari banjir request multi-IP (catatan 28a).
+
+**Acceptance Criteria:**
+
+- [ ] Push ke `main` menghasilkan deploy otomatis yang sukses (atau prosedur manual terdokumentasi dan teruji)
+- [ ] Tidak ada kredensial/secret di repo; `ADMIN_SESSION_SECRET` sudah dirotasi
+- [ ] `DEPLOYMENT.md` akurat untuk Cloudflare; versi cPanel terarsip
+- [ ] `code-reviewer` bersih
+
+---
+
+### 29a — Catatan pelaksanaan (14 Okt 2026)
+
+- **Langkah 1 (menyimpang dari teks, disengaja):** `NEXT_PUBLIC_*` **tidak** ditaruh di `vars` wrangler — Next meng-inline-nya ke JavaScript **saat build** dari `.env`/environment build, sehingga nilai runtime di `vars` tidak berpengaruh. Pembagian akhir (tabel `DEPLOYMENT.md` §0): `NEXT_PUBLIC_*` + `GOOGLE_SITE_VERIFICATION` → `.env` (deploy dari komputer) atau Build variables Workers Builds; non-rahasia runtime (`TURNSTILE_SITE_KEY`, `TRUST_CF_CONNECTING_IP`) → `vars`; rahasia (`ADMIN_SESSION_SECRET`, `TURNSTILE_SECRET_KEY`, nanti `API_CO_ID_KEY`) → `wrangler secret put`. `scripts/strip-bundle-secrets.mjs` (Skill 23) menjamin rahasia `.env` tidak ikut bundle.
+- **Langkah 2:** `.env.example` ditulis ulang: peta lokasi konfigurasi production, tanpa `RECAPTCHA_*`, `DB_*` hanya untuk `db:export` (default SSH tunnel 127.0.0.1:3307), cara membuat secret tanpa `openssl` (Windows).
+- **Langkah 3 (rotasi secret) & 4 (Workers Builds):** tidak bisa dikerjakan tanpa akun Cloudflare pemilik — langkah persis ada di `DEPLOYMENT.md` §3 dan §9. Prosedur resmi sampai Workers Builds aktif: `npm run deploy` dari komputer pemilik (guard + build + penyaring rahasia + deploy). Teruji sejauh tanpa login: `cf:build`, `wrangler deploy --dry-run` (binding DB + UPLOADS, ±1,06 MiB gzip), guard menolak setiap konfigurasi salah.
+- **Langkah 5:** `DEPLOYMENT.md` baru (peta konfigurasi, resource, rahasia, `.env`, DB & admin, deploy, uji asap, WAF & notifikasi, Workers Builds, operasional: `wrangler tail`, rollback, Time Travel/backup D1, alur migrasi skema). Versi cPanel → `docs/legacy/DEPLOYMENT-cpanel.md` (diberi banner arsip).
+- **Langkah 6–7:** README §2/§6/§8/§9 dan checklist 21.3 diperbarui untuk Cloudflare (resource & bucket privat, admin via `seed:admin --remote`, WAF, uji asap).
+- **Tambahan:** `check-deploy-env.mjs` memberi peringatan (tidak memblokir — staging boleh dummy) bila `NEXT_PUBLIC_WA_NUMBER` kosong/dummy development.
+- **Dari review/audit:** perintah admin untuk PowerShell & bash dengan password lewat prompt (tidak tersimpan di riwayat); secret sesi dialirkan `node … | wrangler secret put` (tidak tampil di layar/clipboard); peringatan rotasi secret di **cPanel yang masih live** (temuan Kritis operasional — kode lama masih menerima nilai yang bocor); guard kini menolak nama berbau rahasia (`SECRET|PASSWORD|TOKEN|PRIVATE|API_KEY|_KEY|CREDENTIAL|AUTH`, kecuali allowlist `TURNSTILE_SITE_KEY`)/`DB_*` di `vars` (termasuk `env.*.vars`), `TRUST_CF_CONNECTING_IP` ≠ "1", dan `NEXT_PUBLIC_*` bernama rahasia; `.gitignore` mengabaikan semua `*.sql` kecuali migrations/seed/legacy dan backup D1 diarahkan ke `db-export/`; Workers Builds: larangan rahasia di Build variables + matikan build cabang non-produksi; catatan rollback (secret/skema) & `wrangler tail` (PII); checklist 21.3 & Skill 30 ditambah butir akun Cloudflare, workers_dev/preview_urls, Remote MySQL.
+- **Belum terpenuhi (menunggu pemilik):** AC "push ke main → deploy otomatis" (opsional; alternatif manual terdokumentasi) dan "`ADMIN_SESSION_SECRET` sudah dirotasi" — keduanya butuh akun Cloudflare.
+
+## Skill 30 — Cutover & Pensiun cPanel
+
+**Tujuan:** Domain asli dilayani Cloudflare Workers dan cPanel dinonaktifkan dengan aman. **GERBANG:** hanya dikerjakan setelah Skill 23–29 selesai dan situs stabil di `*.workers.dev` minimal 48 jam.
+
+**Langkah:**
+
+1. Bekukan perubahan di cPanel (minta pemilik tidak mengubah produk/pesanan selama cutover).
+2. Import data final (Skill 25) ke D1 **remote**; verifikasi jumlah baris dan sampel pesanan terbaru.
+3. Upload final `public/uploads/` → R2 (selisih file sejak Skill 27).
+4. Pasang custom domain `rasamedan.com` + `www` ke Worker (DNS sudah di Cloudflare sejak Skill 23); pastikan SSL otomatis aktif.
+5. Uji end-to-end di domain asli: checkout sampai pesan WhatsApp terbentuk, cek pesanan, login admin, ubah status pesanan, upload foto produk.
+6. Observasi 48 jam (Workers analytics + logs). Bila ada masalah besar → kembalikan DNS ke cPanel (rollback terdokumentasi).
+7. Setelah stabil: hentikan Node.js App di cPanel. **Jangan hapus DB MySQL sebelum 30 hari** (cadangan rollback). Jadwalkan backup D1 berkala (`wrangler d1 export` / Time Travel).
+8. Perbarui tabel status di file ini; perbarui PRD §5.1 (tech stack) bila perlu; tandai backlog Skill 15, 21.2 no. 1–6 yang sudah tertutup.
+
+> **Tambahan dari audit Skill 29:** setelah domain asli aktif — ganti `NEXT_PUBLIC_SITE_URL` ke `https://rasamedan.com` dan deploy ulang; set `"workers_dev": false` dan `"preview_urls": false` di `wrangler.jsonc` (URL workers.dev/preview melewati aturan WAF zona); hapus hostname workers.dev dari widget Turnstile; tutup Remote MySQL & hapus user MySQL ekspor di cPanel; pastikan tidak ada tabel `_seed_guard` tertinggal di D1 production; ambil bookmark Time Travel sebelum & sesudah impor.
+
+**Acceptance Criteria:**
+
+- [ ] `rasamedan.com` dilayani dari Workers dengan SSL aktif
+- [ ] Seluruh alur bisnis (PRD §2) berjalan utuh di domain asli
+- [ ] Prosedur rollback teruji (DNS bisa dikembalikan ke cPanel)
+- [ ] cPanel dinonaktifkan; DB MySQL lama diarsipkan, bukan dihapus
+- [ ] Tabel status diperbarui (Skill 23–30 ✅; Skill 15 dan temuan 21.2 terkait ditutup)
+
+---
+
+*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 31, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*

@@ -1,0 +1,23 @@
+# Rahasia runtime untuk `npm run preview` (wrangler dev) — salin menjadi `.dev.vars`.
+# `.dev.vars` TIDAK di-commit. Untuk production pakai `wrangler secret put <NAMA>`.
+#
+# Variabel NEXT_PUBLIC_* TIDAK ditaruh di sini: nilainya di-inline saat build
+# (dibaca dari .env saat `opennextjs-cloudflare build`).
+#
+# Database tidak dikonfigurasi di sini: binding D1 `DB` ada di wrangler.jsonc
+# (lokal: npm run db:migrate). File ini juga sumber nama variabel untuk
+# `npm run cf:typegen` — tambahkan nama baru di sini bila menambah secret.
+
+# Wajib: string acak milik sendiri, minimal 32 karakter (openssl rand -hex 32).
+ADMIN_SESSION_SECRET=
+
+# Cloudflare Turnstile. Untuk preview lokal boleh test key resmi
+#   site 1x00000000000000000000AA / secret 1x0000000000000000000000000000000AA
+# ditambah ALLOW_TEST_CAPTCHA=1 (preview berjalan sebagai production; tanpa flag ini
+# test key ditolak). JANGAN pernah set ALLOW_TEST_CAPTCHA di Workers production.
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+ALLOW_TEST_CAPTCHA=
+
+# Opsional: meta verifikasi Google Search Console.
+GOOGLE_SITE_VERIFICATION=

@@ -15,6 +15,7 @@ import {
   IconBottle,
 } from "@/components/ui/icons";
 import { formatRupiah } from "@/lib/format";
+import { variantPrice, variantWeight } from "@/lib/pricing";
 import { buildWaLink } from "@/lib/whatsapp";
 import type { Product } from "@/lib/products";
 import styles from "./ProductDetail.module.css";
@@ -25,13 +26,24 @@ function CategoryIcon({ category }: { category: string }) {
   return <IconCake size={52} />;
 }
 
-export default function ProductDetail({ product }: { product: Product }) {
+export default function ProductDetail({
+  product,
+  categoryName,
+}: {
+  product: Product;
+  /** Nama kategori dari DB — fallback untuk kategori buatan admin tanpa terjemahan. */
+  categoryName: string;
+}) {
   const { t } = useI18n();
   const { addItem } = useCart();
   const hasVariants = product.variants.length > 0;
+  // Varian disimpan per NAMA (id varian berubah setiap admin menyimpan produk).
   const [variant, setVariant] = useState<string | null>(
-    hasVariants ? product.variants[0] : null
+    hasVariants ? product.variants[0].name : null
   );
+  const price = variantPrice(product, variant) ?? product.price;
+  const categoryKey = `categories.${product.category}`;
+  const categoryLabel = t(categoryKey) === categoryKey ? categoryName : t(categoryKey);
   const [added, setAdded] = useState(false);
 
   const askStock = product.stock_status === "tanya-stok";
@@ -44,11 +56,11 @@ export default function ProductDetail({ product }: { product: Product }) {
       productId: product.id,
       slug: product.slug,
       name: product.name,
-      price: product.price,
+      price,
       variant,
       image: product.image,
       category: product.category,
-      weight_grams: product.weight_grams,
+      weight_grams: variantWeight(product, variant),
     });
     setAdded(true);
   }
@@ -79,9 +91,9 @@ export default function ProductDetail({ product }: { product: Product }) {
       </div>
 
       <div className={styles.body}>
-        <p className={styles.category}>{t(`categories.${product.category}`)}</p>
+        <p className={styles.category}>{categoryLabel}</p>
         <h1 className={styles.name}>{product.name}</h1>
-        <p className={styles.price}>{formatRupiah(product.price)}</p>
+        <p className={styles.price} aria-live="polite">{formatRupiah(price)}</p>
 
         <div className={styles.badges}>
           {product.is_halal && (
@@ -99,15 +111,21 @@ export default function ProductDetail({ product }: { product: Product }) {
             <div className={styles.variants}>
               {product.variants.map((v) => (
                 <button
-                  key={v}
+                  key={v.name}
                   type="button"
                   className={`${styles.variant} ${
-                    variant === v ? styles.variantActive : ""
+                    variant === v.name ? styles.variantActive : ""
                   }`}
-                  aria-pressed={variant === v}
-                  onClick={() => setVariant(v)}
+                  aria-pressed={variant === v.name}
+                  onClick={() => setVariant(v.name)}
                 >
-                  {v}
+                  {v.name}
+                  {v.price_delta !== 0 && (
+                    <span className={styles.variantDelta}>
+                      {v.price_delta > 0 ? "+" : "−"}
+                      {formatRupiah(Math.abs(v.price_delta))}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

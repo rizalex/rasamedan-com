@@ -1,30 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import StatusBadge, { type OrderStatus } from "@/components/order/StatusBadge";
 import { formatRupiah, formatDateTime } from "@/lib/format";
 import { IconSearch } from "@/components/ui/icons";
+import CaptchaWidget, { type CaptchaHandle } from "@/components/security/CaptchaWidget";
+import { captchaErrorKey } from "@/lib/captcha-errors";
 import styles from "./CheckOrderView.module.css";
-
-// Minimal typing untuk API grecaptcha yang dipakai.
-declare global {
-  interface Window {
-    grecaptcha?: {
-      render: (el: HTMLElement, opts: Record<string, unknown>) => number;
-      reset: (id?: number) => void;
-      getResponse: (id?: number) => string;
-    };
-  }
-}
-
-const SCRIPT_SRC = "https://www.google.com/recaptcha/api.js?render=explicit";
 
 type LookupItem = {
   product_name: string;
   variant: string | null;
   quantity: number;
   unit_price: number;
+};
+type LookupShipment = {
+  courier_code: string | null;
+  courier_name: string | null;
+  waybill: string;
+  track_url: string | null;
 };
 type LookupOrder = {
   order_code: string;
@@ -33,73 +28,67 @@ type LookupOrder = {
   status: OrderStatus;
   total_estimate: number | null;
   created_at: string;
+  /** Resi & tautan lacak — hanya dikirim server bila dicari dengan Order ID. */
+  shipment: LookupShipment | null;
   items: LookupItem[];
 };
 
-export default function CheckOrderView({
-  recaptchaSiteKey,
-}: {
-  recaptchaSiteKey: string;
-}) {
+/** Resi + tombol salin + tautan lacak resmi kurir (Skill 22, jalur cadangan). */
+function ShipmentInfo({ shipment }: { shipment: LookupShipment }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const courier =
+    shipment.courier_code === "lainnya" || !shipment.courier_name
+      ? t("checkOrder.otherCourier")
+      : shipment.courier_name;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(shipment.waybill);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard tidak tersedia — resi tetap terlihat untuk disalin manual */
+    }
+  }
+
+  return (
+    <div className={styles.shipment}>
+      <p className={styles.shipmentTitle}>{t("checkOrder.shipment")}</p>
+      <p className={styles.shipmentLine}>
+        <span>{courier}</span>
+        <span>
+          {t("checkOrder.waybill")}: <strong className={styles.waybill}>{shipment.waybill}</strong>
+        </span>
+        <button type="button" className={styles.copyBtn} onClick={copy}>
+          {copied ? t("checkOrder.copied") : t("checkOrder.copy")}
+        </button>
+      </p>
+      {shipment.track_url && (
+        <p className={styles.shipmentLine}>
+          <a href={shipment.track_url} target="_blank" rel="noopener noreferrer">
+            {t("checkOrder.trackOnCourier")} ↗
+          </a>
+          <span className={styles.shipmentHint}>{t("checkOrder.trackHint")}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+export default function CheckOrderView({ captchaSiteKey }: { captchaSiteKey: string }) {
   const { t, locale } = useI18n();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orders, setOrders] = useState<LookupOrder[] | null>(null);
+  // Apakah pencarian TERAKHIR memakai Order ID (bukan isi kolom saat ini).
+  const [searchedWithCode, setSearchedWithCode] = useState(false);
   const [token, setToken] = useState("");
 
-  const captchaRef = useRef<HTMLDivElement>(null);
-  const widgetId = useRef<number | null>(null);
-  const captchaEnabled = !!recaptchaSiteKey;
-
-  // Muat script Google & render widget (explicit render agar tidak balapan dgn React).
-  useEffect(() => {
-    if (!captchaEnabled) return;
-    let cancelled = false;
-
-    function tryRender() {
-      if (cancelled || widgetId.current !== null) return;
-      if (!window.grecaptcha?.render || !captchaRef.current) return;
-      widgetId.current = window.grecaptcha.render(captchaRef.current, {
-        sitekey: recaptchaSiteKey,
-        callback: (tok: string) => setToken(tok),
-        "expired-callback": () => setToken(""),
-        "error-callback": () => setToken(""),
-      });
-    }
-
-    if (
-      !document.querySelector(
-        'script[src^="https://www.google.com/recaptcha/api.js"]'
-      )
-    ) {
-      const s = document.createElement("script");
-      s.src = SCRIPT_SRC;
-      s.async = true;
-      s.defer = true;
-      document.head.appendChild(s);
-    }
-
-    const iv = setInterval(() => {
-      if (window.grecaptcha?.render) {
-        tryRender();
-        if (widgetId.current !== null) clearInterval(iv);
-      }
-    }, 200);
-
-    return () => {
-      cancelled = true;
-      clearInterval(iv);
-    };
-  }, [captchaEnabled, recaptchaSiteKey]);
-
-  function resetCaptcha() {
-    setToken("");
-    if (widgetId.current !== null && window.grecaptcha) {
-      window.grecaptcha.reset(widgetId.current);
-    }
-  }
+  const captcha = useRef<CaptchaHandle>(null);
+  const captchaEnabled = !!captchaSiteKey;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -109,28 +98,32 @@ export default function CheckOrderView({
       return;
     }
     if (captchaEnabled && !token) {
-      setError(t("checkOrder.errCaptcha"));
+      setError(t("captcha.required"));
       return;
     }
     setLoading(true);
     setOrders(null);
     try {
-      const qs = new URLSearchParams({ phone: phone.trim() });
-      if (code.trim()) qs.set("code", code.trim());
-      if (token) qs.set("captcha", token);
-      const res = await fetch(`/api/orders?${qs.toString()}`);
+      // POST: nomor HP & token tidak masuk URL/riwayat browser/log (Skill 21).
+      const res = await fetch("/api/orders/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.trim(), code: code.trim(), captchaToken: token }),
+      });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? t("checkOrder.errGeneric"));
+        const key = captchaErrorKey(data.code);
+        setError(key ? t(key) : data.error ?? t("checkOrder.errGeneric"));
       } else {
+        setSearchedWithCode(!!code.trim());
         setOrders(data.orders);
       }
     } catch {
       setError(t("checkOrder.errGeneric"));
     } finally {
       setLoading(false);
-      // Token reCAPTCHA v2 sekali pakai — reset agar pencarian berikutnya valid.
-      if (captchaEnabled) resetCaptcha();
+      // Token Turnstile sekali pakai — reset agar pencarian berikutnya valid.
+      captcha.current?.reset();
     }
   }
 
@@ -159,13 +152,12 @@ export default function CheckOrderView({
             placeholder="ORD-20260707-0001"
           />
         </label>
-        {captchaEnabled && (
-          <div
-            ref={captchaRef}
-            className={styles.captcha}
-            aria-label="reCAPTCHA"
-          />
-        )}
+        <CaptchaWidget
+          ref={captcha}
+          siteKey={captchaSiteKey}
+          action="check-order"
+          onToken={setToken}
+        />
         <button type="submit" className={styles.submit} disabled={loading}>
           <IconSearch size={17} />
           {loading ? t("checkOrder.searching") : t("checkOrder.search")}
@@ -180,8 +172,9 @@ export default function CheckOrderView({
             <p className={styles.noResults}>{t("checkOrder.noResults")}</p>
           ) : (
             <ul className={styles.list}>
-              {orders.map((o) => (
-                <li key={o.order_code} className={styles.card}>
+              {orders.map((o, i) => (
+                // Indeks: Order ID bisa tersamar (sama untuk dua pesanan di hari yang sama).
+                <li key={i} className={styles.card}>
                   <div className={styles.cardHead}>
                     <div>
                       <p className={styles.code}>{o.order_code}</p>
@@ -203,6 +196,18 @@ export default function CheckOrderView({
                       </li>
                     ))}
                   </ul>
+
+                  {o.shipment ? (
+                    <ShipmentInfo shipment={o.shipment} />
+                  ) : (
+                    // Petunjuk dari status yang memang sudah terlihat — server tidak
+                    // memberi tahu apakah resi ada tanpa Order ID.
+                    o.fulfillment_method === "kurir" &&
+                    !searchedWithCode &&
+                    (o.status === "Dikirim" || o.status === "Selesai") && (
+                      <p className={styles.shipmentHint}>{t("checkOrder.waybillNeedsCode")}</p>
+                    )
+                  )}
 
                   <div className={styles.cardFoot}>
                     <span>

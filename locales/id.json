@@ -33,7 +33,8 @@
     "weightEstimate": "Perkiraan berat",
     "description": "Deskripsi",
     "ingredients": "Bahan-bahan",
-    "chooseVariant": "Pilih varian"
+    "chooseVariant": "Pilih varian",
+    "priceFrom": "Mulai dari"
   },
   "home": {
     "heroEyebrow": "Asli dari kampung halaman",
@@ -42,7 +43,7 @@
     "heroSubtitle": "Jelajahi kue, camilan, sirup, dan oleh-oleh khas Medan. Pesan mudah lewat WhatsApp.",
     "heroCtaProducts": "Lihat Produk",
     "categoriesTitle": "Kategori",
-    "featuredTitle": "Produk Terlaris",
+    "featuredTitle": "Produk Pilihan",
     "waGreeting": "Halo, saya ingin bertanya tentang produk Rasa Medan."
   },
   "catalog": {
@@ -85,7 +86,13 @@
     "successMsg": "Kami membuka WhatsApp agar Anda bisa mengirim pesanan ke pemilik. Simpan Order ID untuk cek status.",
     "orderId": "Order ID",
     "continueWa": "Lanjutkan ke WhatsApp",
-    "checkStatus": "Cek status pesanan"
+    "checkStatus": "Cek status pesanan",
+    "errVariantInvalid": "Varian \"{variant}\" untuk {product} sudah tidak tersedia. Hapus dari keranjang lalu pilih ulang.",
+    "errVariantRequired": "Pilih varian untuk {product} terlebih dahulu.",
+    "errProductGone": "{product} sudah tidak tersedia. Hapus dari keranjang untuk melanjutkan.",
+    "removeItem": "Hapus dari keranjang",
+    "chooseVariant": "Pilih varian",
+    "pricesUpdated": "Harga sudah diperbarui sesuai harga terbaru. Total yang berlaku: {total} (sudah dipakai di pesan WhatsApp)."
   },
   "whatsapp": {
     "askStock": "Halo, saya ingin menanyakan ketersediaan stok untuk produk:"
@@ -99,8 +106,15 @@
     "searching": "Mencari...",
     "noResults": "Tidak ada pesanan ditemukan untuk data tersebut.",
     "errPhone": "Nomor HP wajib diisi.",
-    "errCaptcha": "Mohon centang reCAPTCHA terlebih dahulu.",
-    "errGeneric": "Terjadi kesalahan. Silakan coba lagi."
+    "errGeneric": "Terjadi kesalahan. Silakan coba lagi.",
+    "shipment": "Pengiriman",
+    "waybill": "No. resi",
+    "copy": "Salin",
+    "copied": "Tersalin",
+    "trackOnCourier": "Lacak di situs kurir",
+    "trackHint": "Tempel nomor resi di halaman lacak kurir.",
+    "otherCourier": "Kurir",
+    "waybillNeedsCode": "Masukkan Order ID pesanan ini (ada di pesan WhatsApp Anda) untuk melihat nomor resi pengiriman."
   },
   "categories": {
     "all": "Semua",
@@ -169,5 +183,15 @@
     "Siap Diambil": "Siap Diambil",
     "Selesai": "Selesai",
     "Dibatalkan": "Dibatalkan"
+  },
+  "errorPage": {
+    "title": "Halaman sedang tidak dapat dimuat",
+    "message": "Maaf, terjadi gangguan sementara. Silakan coba lagi beberapa saat lagi, atau hubungi kami via WhatsApp.",
+    "retry": "Coba lagi"
+  },
+  "captcha": {
+    "required": "Mohon selesaikan verifikasi keamanan terlebih dahulu.",
+    "failed": "Verifikasi keamanan gagal atau kedaluwarsa. Silakan ulangi.",
+    "unavailable": "Verifikasi keamanan sedang tidak tersedia. Coba lagi nanti."
   }
 }

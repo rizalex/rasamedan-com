@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useI18n } from "@/components/i18n/I18nProvider";
-import { useCart } from "@/components/cart/CartProvider";
+import { MAX_QTY, useCart } from "@/components/cart/CartProvider";
 import { formatRupiah, formatWeight } from "@/lib/format";
 import {
   IconPlus,
@@ -96,6 +96,7 @@ export default function CartView() {
                 <button
                   type="button"
                   aria-label={t("cart.increase")}
+                  disabled={it.quantity >= MAX_QTY}
                   onClick={() =>
                     setQuantity(it.productId, it.variant, it.quantity + 1)
                   }

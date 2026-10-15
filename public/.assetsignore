@@ -1,0 +1,5 @@
+# Dibaca wrangler dari direktori aset (.open-next/assets = salinan public/).
+# Foto produk ada di R2 (Skill 27): file yang tertinggal di public/uploads tidak
+# boleh ikut ter-deploy sebagai aset statis yang menimpa route /uploads/[...path].
+uploads/*
+.assetsignore

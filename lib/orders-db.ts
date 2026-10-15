@@ -1,5 +1,4 @@
-import { pool } from "@/lib/db";
-import type { RowDataPacket } from "mysql2/promise";
+import { query, queryIn } from "@/lib/db";
 
 /** Query pesanan sisi admin (server-only). Terpisah dari lib/orders.ts yang
  *  ikut ter-bundle ke client. */
@@ -23,14 +22,16 @@ export type AdminOrder = {
   note: string | null;
   status: string;
   total_estimate: number | null;
+  /** ISO-8601 UTC, mis. "2026-10-14T03:00:00Z". */
   created_at: string;
+  /** Pengiriman (Skill 22): kode di lib/couriers.mjs & nomor resi, null bila belum. */
+  courier_code: string | null;
+  waybill: string | null;
   items: AdminOrderItem[];
 };
 
-interface OrderRow extends RowDataPacket, Omit<AdminOrder, "items"> {}
-interface ItemRow extends RowDataPacket, AdminOrderItem {
-  order_id: number;
-}
+type OrderRow = Omit<AdminOrder, "items">;
+type ItemRow = AdminOrderItem & { order_id: number };
 
 /** Daftar semua pesanan, filter opsional by status & q (order_code atau phone). */
 export async function getAdminOrders(filter: {
@@ -43,27 +44,32 @@ export async function getAdminOrders(filter: {
     where.push("status = ?");
     params.push(filter.status);
   }
-  if (filter.q) {
+  // Kata kunci = potongan Order ID atau nomor HP: hanya huruf, angka, dan "-".
+  // Karakter lain (termasuk wildcard `%`/`_`) dibuang, dan panjang dibatasi
+  // karena D1 menolak pola LIKE di atas 50 byte ("pattern too complex").
+  const q = (filter.q ?? "").replace(/[^0-9A-Za-z-]/g, "").slice(0, 24);
+  if (q) {
     where.push("(order_code LIKE ? OR phone LIKE ?)");
-    params.push(`%${filter.q}%`, `%${filter.q}%`);
+    params.push(`%${q}%`, `%${q}%`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  const [orders] = await pool.query<OrderRow[]>(
+  const orders = await query<OrderRow>(
     `SELECT id, order_code, recipient_name, phone, fulfillment_method,
-            address, city, location_note, note, status, total_estimate, created_at
+            address, city, location_note, note, status, total_estimate, created_at,
+            courier_code, waybill
        FROM orders ${whereSql}
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT 200`,
     params
   );
   if (orders.length === 0) return [];
 
-  const ids = orders.map((o) => o.id);
-  const [items] = await pool.query<ItemRow[]>(
-    `SELECT order_id, product_name, variant, quantity, unit_price
-       FROM order_items WHERE order_id IN (?)`,
-    [ids]
+  const items = await queryIn<ItemRow>(
+    (ph) => `SELECT order_id, product_name, variant, quantity, unit_price
+       FROM order_items WHERE order_id IN (${ph})
+      ORDER BY id ASC`,
+    orders.map((o) => o.id)
   );
 
   return orders.map((o) => ({
@@ -74,7 +80,7 @@ export async function getAdminOrders(filter: {
 
 /** Ringkasan jumlah pesanan per status (untuk dashboard). */
 export async function getOrderStatusCounts(): Promise<Record<string, number>> {
-  const [rows] = await pool.query<RowDataPacket[]>(
+  const rows = await query<{ status: string; n: number }>(
     "SELECT status, COUNT(*) AS n FROM orders GROUP BY status"
   );
   const out: Record<string, number> = {};

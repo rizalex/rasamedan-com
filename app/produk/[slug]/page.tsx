@@ -75,7 +75,7 @@ export default async function ProductPage({
         ])}
       />
       <Header />
-      <ProductDetail product={product} />
+      <ProductDetail product={product} categoryName={catName} />
       <Footer />
     </>
   );

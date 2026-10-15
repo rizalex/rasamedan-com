@@ -1,9 +1,9 @@
 # Product Requirement Document (PRD)
 ## Website E-commerce Rasa Medan - Oleh-Oleh khas Medan
 
-**Versi:** 1.0
-**Tanggal:** 6 Juli 2026
-**Status:** Draft untuk pengembangan MVP
+**Versi:** 1.1 (revisi mockup visual — lihat §9)
+**Tanggal:** 6 Juli 2026 (v1.0); diperbarui 13 Oktober 2026 (header disesuaikan dengan isi v1.1)
+**Status:** MVP selesai; pengembangan pasca-MVP mengikuti `SKILLS.md`
 
 ---
 
@@ -143,6 +143,12 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 
 ---
 
+### 3.10 Lacak Pengiriman (Skill 22)
+- Untuk pesanan bermetode kurir, admin mengisi **kurir** dan **nomor resi** di dashboard pesanan setelah paket diserahkan ke kurir.
+- Pelanggan melihat nama kurir, nomor resi (bisa disalin), dan tautan ke halaman lacak resmi kurir di halaman **Cek Status Pesanan** — nomor resi hanya tampil bila pencarian menyertakan **Order ID** pesanan tersebut, karena resi membuka lokasi & waktu antar di situs kurir. Pencarian dengan nomor HP saja menampilkan Order ID tersamar (mis. `ORD-20261014-••••`) — Order ID lengkap ada di pesan WhatsApp pembeli.
+- Linimasa perjalanan paket langsung di situs (via api.co.id) menyusul setelah verifikasi API (SKILLS 22.0/22.4).
+- **Di luar cakupan (tetap):** ongkir otomatis, pemesanan kurir otomatis, dan perubahan status otomatis — status pesanan tetap diubah manual oleh admin.
+
 ## 4. Desain & Identitas Visual
 
 ### 4.1 Arahan Warna (Nuansa Melayu/Medan)
@@ -164,12 +170,12 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 
 ### 5.1 Tech Stack
 - **Frontend**: Next.js, HTML5, CSS, JavaScript
-- **Database**: MySQL
+- **Database**: Cloudflare D1 (SQLite) — semula MySQL, dimigrasi di Skill 24 (14 Okt 2026); skema aktual di `migrations/`
 - **Autentikasi Admin**: session/JWT sederhana (hanya untuk admin, bukan pelanggan)
 - **Penyimpanan Foto Produk**: folder upload lokal atau storage cloud (disarankan cloud agar scalable, mis. Cloudinary/S3 — keputusan bisa menyesuaikan hosting)
 - **Integrasi WhatsApp**: link `wa.me/<nomor>?text=<pesan encoded>` (tanpa API berbayar untuk MVP)
 
-### 5.2 Skema Data Utama (Gambaran Tabel MySQL)
+### 5.2 Skema Data Utama (Gambaran Tabel; implementasi aktual: `migrations/0001_init.sql`)
 - `products`: id, nama, kategori, harga, deskripsi, bahan, label_halal, status_stok, foto_url, variasi (json/tabel relasi)
 - `orders`: id, order_code (Order ID unik), nama_penerima, no_hp, metode_pengambilan (kurir/pickup), alamat, catatan_lokasi, status, total_estimasi, created_at
 - `order_items`: id, order_id, product_id, variasi, jumlah, harga_satuan

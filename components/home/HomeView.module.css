@@ -12,7 +12,7 @@
       rgba(20, 67, 46, 0.42) 60%,
       rgba(15, 51, 35, 0.12) 100%
     ),
-    url("/images/hero-medan.png") center right / cover no-repeat,
+    url("/images/hero-medan.webp") center right / cover no-repeat,
     var(--color-primary-dark);
   color: var(--color-bg);
   margin: 16px 20px 0;
@@ -181,7 +181,7 @@
         rgba(20, 67, 46, 0.82) 55%,
         rgba(15, 51, 35, 0.6) 100%
       ),
-      url("/images/hero-medan.png") center bottom / cover no-repeat,
+      url("/images/hero-medan.webp") center bottom / cover no-repeat,
       var(--color-primary-dark);
     min-height: 360px;
   }

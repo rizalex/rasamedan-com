@@ -33,5 +33,7 @@ export function formatDateTime(value: string | Date, locale: string = "id"): str
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    // Server Workers berjalan di UTC; tampilkan WIB (sama dengan Order ID).
+    timeZone: "Asia/Jakarta",
   }).format(d);
 }

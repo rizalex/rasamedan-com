@@ -3,29 +3,45 @@
   "version": "0.1.0",
   "private": true,
   "description": "Website katalog oleh-oleh khas Medan (MVP) - Rasa Medan",
+  "engines": {
+    "node": ">=20.6"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "db:test": "node --env-file=.env scripts/test-db.mjs",
-    "db:schema": "node --env-file=.env scripts/apply-schema.mjs",
-    "db:migrate": "node --env-file=.env scripts/migrate-add-weight.mjs",
-    "db:repair": "node --env-file=.env scripts/repair-order-items.mjs",
-    "seed": "node --env-file=.env scripts/seed.mjs",
-    "seed:categories": "node --env-file=.env scripts/seed-categories.mjs",
-    "seed:admin": "node --env-file=.env scripts/seed-admin.mjs"
+    "lint": "eslint .",
+    "db:migrate": "wrangler d1 migrations apply rasamedan --local && wrangler d1 execute rasamedan --local --command \"CREATE TABLE IF NOT EXISTS _local_dev (note TEXT)\"",
+    "db:migrate:remote": "wrangler d1 migrations apply rasamedan --remote",
+    "db:migrate:staging": "wrangler d1 migrations apply rasamedan-staging --remote --env staging",
+    "db:export": "node --env-file=.env scripts/export-mysql.mjs",
+    "db:import": "node scripts/import-d1.mjs",
+    "db:convert": "node scripts/convert-phpmyadmin.mjs",
+    "seed": "node scripts/seed.mjs",
+    "seed:admin": "node scripts/seed-admin.mjs",
+    "seed:sql": "node scripts/build-seed-sql.mjs",
+    "preview": "npm run cf:build && opennextjs-cloudflare preview",
+    "deploy": "node scripts/check-deploy-env.mjs && npm run cf:build && opennextjs-cloudflare deploy",
+    "cf:dryrun": "npm run cf:build && wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "cf:build": "opennextjs-cloudflare build && node scripts/strip-bundle-secrets.mjs",
+    "ci:build": "node scripts/ci-build.mjs",
+    "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv --include-runtime=false --strict-vars=false --env-file .dev.vars.example",
+    "uploads:r2": "node scripts/upload-to-r2.mjs"
   },
   "dependencies": {
-    "mysql2": "^3.11.5",
-    "next": "^15.1.6",
+    "@opennextjs/cloudflare": "^1.20.10",
+    "next": "^15.5.27",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
-    "typescript": "^5.7.3"
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.27",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.150.0"
   }
 }

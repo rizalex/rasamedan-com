@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { dbErrorMessage, execute } from "@/lib/db";
 import { getAdminSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export async function PATCH(
 
   const { id } = await params;
   const orderId = Number(id);
-  if (!Number.isFinite(orderId)) {
+  if (!Number.isInteger(orderId) || orderId < 1) {
     return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
   }
 
@@ -39,19 +39,20 @@ export async function PATCH(
     return NextResponse.json({ error: "Body tidak valid" }, { status: 400 });
   }
 
-  const status = String(body.status ?? "");
+  const status = String(body?.status ?? "");
   if (!VALID_STATUS.includes(status)) {
     return NextResponse.json({ error: "Status tidak valid" }, { status: 400 });
   }
 
   try {
-    await pool.execute("UPDATE orders SET status = ? WHERE id = ?", [
-      status,
-      orderId,
-    ]);
+    const res = await execute("UPDATE orders SET status = ? WHERE id = ?", [status, orderId]);
+    // SQLite menghitung baris yang cocok (termasuk bila status sama) → 0 = tidak ada.
+    if (res.changes === 0) {
+      return NextResponse.json({ error: "Pesanan tidak ditemukan" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true, status });
   } catch (err) {
-    console.error("PATCH /api/admin/orders gagal:", err);
+    console.error("PATCH /api/admin/orders gagal:", dbErrorMessage(err));
     return NextResponse.json({ error: "Gagal memperbarui status" }, { status: 500 });
   }
 }

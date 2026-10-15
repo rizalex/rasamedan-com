@@ -6,7 +6,7 @@ import en from "@/locales/en.json";
  * Provider React + toggle bahasa yang persist ditambahkan di Skill 3/10.
  *
  * Keputusan: memakai kamus JSON ringan (bukan next-intl) agar tetap kompatibel
- * dengan deploy cPanel/Passenger tanpa middleware routing (AGENTS.md bag.2).
+ * dengan Cloudflare Workers tanpa middleware routing (CLAUDE.md §2).
  */
 export const locales = ["id", "en"] as const;
 export type Locale = (typeof locales)[number];

@@ -20,9 +20,15 @@ export default function DeleteProductButton({
     setBusy(true);
     try {
       const res = await fetch(`/api/admin/products/${id}`, { method: "DELETE" });
-      if (res.ok) router.refresh();
-      else setBusy(false);
+      if (res.ok) {
+        router.refresh();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Gagal menghapus produk");
+      setBusy(false);
     } catch {
+      alert("Gagal menghapus produk (koneksi)");
       setBusy(false);
     }
   }
