@@ -15,6 +15,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply rasamedan --remote",
     "db:export": "node --env-file=.env scripts/export-mysql.mjs",
     "db:import": "node scripts/import-d1.mjs",
+    "db:convert": "node scripts/convert-phpmyadmin.mjs",
     "seed": "node scripts/seed.mjs",
     "seed:admin": "node scripts/seed-admin.mjs",
     "seed:sql": "node scripts/build-seed-sql.mjs",

@@ -3,62 +3,66 @@
 // Rahasia runtime JANGAN ditaruh di sini — pakai `wrangler secret put <NAMA>`
 // (production) atau `.dev.vars` (lokal). Lihat CLAUDE.md §2.
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "rasa-medan",
-  "main": ".open-next/worker.js",
-  // Jangan di masa depan: harus <= tanggal yang didukung workerd bawaan wrangler.
-  "compatibility_date": "2026-10-01",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "observability": {
-    "enabled": true,
-    "logs": {
-      // Log invocation (URL tiap request) dimatikan: hemat & meminimalkan data
-      // pengunjung di log. Cek pesanan kini POST (nomor HP di body, bukan URL).
-      // console.error aplikasi tetap tercatat.
-      "invocation_logs": false
-    }
-  },
-  // Var non-rahasia runtime. Secret (ADMIN_SESSION_SECRET, TURNSTILE_SECRET_KEY)
-  // TIDAK di sini — pakai `wrangler secret put`.
-  "vars": {
-    // Request di Workers selalu lewat edge Cloudflare yang menimpa header ini,
-    // jadi aman dipercaya untuk rate limit (lib/client-ip.ts).
-    "TRUST_CF_CONNECTING_IP": "1",
-    // Site key Turnstile (publik). Diisi di sini, bukan di dashboard: `wrangler
-    // deploy` menimpa vars dashboard. Kosong = semua form captcha ditolak di
-    // production (fail-closed) — WAJIB diisi sebelum deploy.
-    "TURNSTILE_SITE_KEY": ""
-  },
-  // Pengaman: wrangler menjalankan ini sebelum bundling pada SETIAP `deploy`,
-  // `versions upload`, dan `dev` — termasuk bila dipanggil langsung tanpa
-  // `npm run deploy` — sehingga rahasia .env lokal tidak bisa ikut ter-upload.
-  "build": {
-    "command": "node scripts/strip-bundle-secrets.mjs"
-  },
-
-  // Database D1 (Skill 24). `database_id` di bawah adalah PLACEHOLDER: cukup
-  // untuk D1 lokal (`next dev`, `npm run preview`, `npm run db:migrate`), tetapi
-  // `npm run deploy` menolak jalan sampai diganti. Pemilik: jalankan
-  // `npx wrangler d1 create rasamedan` lalu salin `database_id` hasilnya ke sini.
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "rasamedan",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
-    }
-  ],
-
-  // Foto produk di R2 (Skill 27), disajikan lewat route /uploads/[...path].
-  // Lokal (`next dev`, preview) memakai R2 tiruan di .wrangler/state — tanpa
-  // akun Cloudflare. Sebelum `npm run deploy`, pemilik WAJIB membuat bucket:
-  //   npx wrangler r2 bucket create rasa-medan-uploads
-  // (tanpa bucket itu `wrangler deploy` gagal dengan pesan bucket tidak ada).
-  "r2_buckets": [
-    { "binding": "UPLOADS", "bucket_name": "rasa-medan-uploads" }
-  ]
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "rasa-medan",
+	"main": ".open-next/worker.js",
+	// Jangan di masa depan: harus <= tanggal yang didukung workerd bawaan wrangler.
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"observability": {
+		"enabled": true,
+		"logs": {
+			// Log invocation (URL tiap request) dimatikan: hemat & meminimalkan data
+			// pengunjung di log. Cek pesanan kini POST (nomor HP di body, bukan URL).
+			// console.error aplikasi tetap tercatat.
+			"invocation_logs": false
+		}
+	},
+	// Var non-rahasia runtime. Secret (ADMIN_SESSION_SECRET, TURNSTILE_SECRET_KEY)
+	// TIDAK di sini — pakai `wrangler secret put`.
+	"vars": {
+		// Request di Workers selalu lewat edge Cloudflare yang menimpa header ini,
+		// jadi aman dipercaya untuk rate limit (lib/client-ip.ts).
+		"TRUST_CF_CONNECTING_IP": "1",
+		// Site key Turnstile (publik). Diisi di sini, bukan di dashboard: `wrangler
+		// deploy` menimpa vars dashboard. Kosong = semua form captcha ditolak di
+		// production (fail-closed) — WAJIB diisi sebelum deploy.
+		"TURNSTILE_SITE_KEY": "0x4AAAAAAD5HvyDRwKtR2-nQ"
+	},
+	// Pengaman: wrangler menjalankan ini sebelum bundling pada SETIAP `deploy`,
+	// `versions upload`, dan `dev` — termasuk bila dipanggil langsung tanpa
+	// `npm run deploy` — sehingga rahasia .env lokal tidak bisa ikut ter-upload.
+	"build": {
+		"command": "node scripts/strip-bundle-secrets.mjs"
+	},
+	// Database D1 (Skill 24). `database_id` di bawah adalah PLACEHOLDER: cukup
+	// untuk D1 lokal (`next dev`, `npm run preview`, `npm run db:migrate`), tetapi
+	// `npm run deploy` menolak jalan sampai diganti. Pemilik: jalankan
+	// `npx wrangler d1 create rasamedan` lalu salin `database_id` hasilnya ke sini.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "rasamedan",
+			"database_id": "3b295ba6-a89b-43e4-955e-a2d30e8d8913",
+			"migrations_dir": "migrations"
+		}
+	],
+	// Foto produk di R2 (Skill 27), disajikan lewat route /uploads/[...path].
+	// Lokal (`next dev`, preview) memakai R2 tiruan di .wrangler/state — tanpa
+	// akun Cloudflare. Sebelum `npm run deploy`, pemilik WAJIB membuat bucket:
+	//   npx wrangler r2 bucket create rasa-medan-uploads
+	// (tanpa bucket itu `wrangler deploy` gagal dengan pesan bucket tidak ada).
+	"r2_buckets": [
+		{
+			"binding": "UPLOADS",
+			"bucket_name": "rasa-medan-uploads"
+		}
+	]
 }

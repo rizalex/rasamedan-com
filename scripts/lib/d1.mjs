@@ -33,7 +33,11 @@ function wrangler(args) {
       .join("\n");
     throw new Error(`wrangler d1 execute gagal (exit ${r.status}):\n${detail}`);
   }
-  return JSON.parse(r.stdout);
+  // Impor remote mencetak baris progres ("├ Checking…") sebelum JSON: ambil
+  // mulai dari baris pertama yang diawali [ atau {.
+  const out = r.stdout;
+  const start = out.search(/^[\[{]/m);
+  return JSON.parse(start >= 0 ? out.slice(start) : out);
 }
 
 /** Jalankan satu SELECT kecil (lewat --command) dan kembalikan barisnya. */
