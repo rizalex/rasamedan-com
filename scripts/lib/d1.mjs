@@ -8,16 +8,19 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-export const DB_NAME = "rasamedan";
+/** `--staging`: D1 staging (Worker `rasa-medan-staging`, wrangler.jsonc env.staging). */
+export const STAGING = process.argv.includes("--staging");
+export const DB_NAME = STAGING ? "rasamedan-staging" : "rasamedan";
+const ENV_ARGS = STAGING ? ["--env", "staging"] : [];
 const WRANGLER = resolve("node_modules/wrangler/bin/wrangler.js");
 
-/** "--remote" bila diminta lewat argumen, selain itu "--local". */
+/** "--remote" bila diminta (atau `--staging`, yang selalu remote), selain itu "--local". */
 export function targetFromArgs(argv = process.argv) {
-  return argv.includes("--remote") ? "--remote" : "--local";
+  return argv.includes("--remote") || STAGING ? "--remote" : "--local";
 }
 
 function wrangler(args) {
-  const r = spawnSync(process.execPath, [WRANGLER, "d1", "execute", DB_NAME, ...args, "--json"], {
+  const r = spawnSync(process.execPath, [WRANGLER, "d1", "execute", DB_NAME, ...ENV_ARGS, ...args, "--json"], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });

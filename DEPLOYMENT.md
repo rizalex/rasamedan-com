@@ -84,6 +84,8 @@ prompt interaktif `npx wrangler secret put ADMIN_SESSION_SECRET` lalu tempel nil
 dari `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 (kosongkan clipboard sesudahnya).
 Rotasi secret sesi = semua admin logout — aman dilakukan kapan saja.
+Alternatif dashboard: Worker → Settings → Variables and Secrets → Add → tipe **Secret**.
+Staging (§9a) memakai perintah yang sama + `--env staging` dengan nilai **berbeda**.
 Bila Worker `rasa-medan` belum pernah di-deploy, `secret put` menawarkan membuat Worker
 kosong — jawab **Y** (atau jalankan langkah ini setelah deploy pertama; sebelum secret
 terpasang, login admin production menolak dengan error 500 — gagal tertutup).
@@ -161,24 +163,68 @@ Cek sebelum deploy (opsional): `npm run cf:dryrun` (ukuran bundle; batas Free 3 
 ## 9. Deploy otomatis dari GitHub (opsional — Workers Builds)
 
 Dashboard → Workers & Pages → `rasa-medan` → Settings → Builds → Connect repository:
-- Branch production: `main`
-- Build command: `npm ci && node scripts/check-deploy-env.mjs && npm run cf:build`
-- Deploy command: `npx wrangler deploy`
-- **Build variables**: HANYA `NEXT_PUBLIC_*` (+ `GOOGLE_SITE_VERIFICATION`) dengan nilai
-  production — CI tidak punya file `.env`. **Jangan** taruh rahasia di sini (terlihat di
-  pengaturan & log build).
-- **Matikan build cabang non-produksi** (Settings → Builds → *non-production branch
-  builds*): versi preview memakai D1/R2 dan secret production yang sama, jadi kode
-  cabang mana pun bisa membaca/menulis data pelanggan asli lewat URL preview.
+
+| Pengaturan | Isi |
+|---|---|
+| Production branch | `main` |
+| Build command | `npm run ci:build` (CI menjalankan `npm ci` sendiri) |
+| Deploy command | `npx wrangler deploy` |
+| Non-production branch builds | Aktif **hanya** bila staging (§9a) sudah disiapkan; selain itu matikan |
+| Non-production branch deploy command | `npx wrangler deploy --env staging` — **jangan** `npx wrangler preview` / `versions upload` (keduanya memakai D1/R2 & secret production) |
+
+- `npm run ci:build` (`scripts/ci-build.mjs`) membaca `WORKERS_CI_BRANCH`: untuk `main`
+  membangun production; untuk branch lain (mis. `dev`) mengganti
+  `NEXT_PUBLIC_SITE_URL` dengan Build variable `STAGING_SITE_URL`, lalu guard +
+  `cf:build`.
+- **Build variables** (berlaku untuk semua branch): HANYA `NEXT_PUBLIC_*`,
+  `GOOGLE_SITE_VERIFICATION`, dan `STAGING_SITE_URL` — CI tidak punya file `.env`.
+  **Jangan** taruh rahasia di sini (terlihat di pengaturan & log build).
 - Rahasia runtime tetap lewat `wrangler secret put` (tidak perlu diulang tiap build).
 - Guard di build command membaca `TURNSTILE_SITE_KEY` dan `database_id` dari
   `wrangler.jsonc` di repo — keduanya harus sudah di-commit sebelum push pertama, atau
   build CI gagal (sengaja).
 - Cek di dashboard saat menyiapkan: nama Worker harus `rasa-medan` (sama dengan
-  `name` di `wrangler.jsonc`); bila kolom build command tidak menerima `&&`, buat skrip
-  npm `ci:build` berisi rangkaian yang sama.
+  `name` di `wrangler.jsonc`).
 
 Sampai Workers Builds diaktifkan, `npm run deploy` dari komputer pemilik adalah prosedur resmi.
+
+### 9a. Staging untuk branch `dev` (preview)
+
+Worker terpisah **`rasa-medan-staging`** (`env.staging` di `wrangler.jsonc`) dengan D1
+`rasamedan-staging` dan R2 `rasa-medan-uploads-staging` sendiri — kode branch `dev`
+tidak pernah menyentuh data pelanggan production. Sekali saja:
+
+```bash
+npx wrangler d1 create rasamedan-staging        # salin database_id → wrangler.jsonc env.staging, commit
+npx wrangler r2 bucket create rasa-medan-uploads-staging   # tetap privat (r2.dev Disabled)
+npm run db:migrate:staging
+node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))" | npx wrangler secret put ADMIN_SESSION_SECRET --env staging
+npx wrangler secret put TURNSTILE_SECRET_KEY --env staging
+npm run seed -- --staging                        # opsional: produk dummy di staging
+```
+Admin staging (password berbeda dari production; PowerShell):
+```powershell
+$p = Read-Host "Password admin STAGING" -AsSecureString
+$env:ADMIN_USERNAME = "admin"
+$env:ADMIN_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($p))
+npm run seed:admin -- --staging
+Remove-Item Env:ADMIN_PASSWORD, Env:ADMIN_USERNAME; Remove-Variable p
+```
+Lalu:
+- Build variable `STAGING_SITE_URL` = `https://rasa-medan-staging.<subdomain>.workers.dev`.
+- Widget Turnstile: tambahkan hostname `rasa-medan-staging.<subdomain>.workers.dev`.
+- Workers Builds: aktifkan non-production branch builds dengan deploy command
+  `npx wrangler deploy --env staging` (tabel di atas). Push ke `dev` → staging
+  ter-deploy; merge ke `main` → production.
+- Batasi *branch include* non-production ke `dev` saja (bukan semua branch).
+  **Wajib** cek deploy command non-production = `npx wrangler deploy --env staging`;
+  default Cloudflare (`npx wrangler versions upload`) mengunggah kode branch sebagai
+  versi Worker **production** (D1/R2/secret production).
+- Manual tanpa CI (PowerShell), **tanpa** `.env` production di folder (Next
+  meng-inline `NEXT_PUBLIC_*` lain dari `.env`, mis. nomor WA asli):
+  `$env:STAGING_SITE_URL="https://…"; $env:WORKERS_CI_BRANCH="dev"; npm run ci:build`
+  lalu `npx wrangler deploy --env staging`.
+- Skrip D1 menerima `--staging` (otomatis remote): `seed`, `seed:admin`, `db:import`.
 
 ## 10. Operasional
 

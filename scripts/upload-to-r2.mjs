@@ -30,6 +30,11 @@ const argValue = (name) => {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : undefined;
 };
+// Staging belum didukung: tolak agar foto uji tidak masuk bucket production.
+if (args.includes("--staging")) {
+  console.error("❌ uploads:r2 belum mendukung --staging (bucket production). Pakai: npx wrangler r2 object put rasa-medan-uploads-staging/<nama> --file <f> --remote");
+  process.exit(1);
+}
 const remote = args.includes("--remote");
 const dryRun = args.includes("--dry-run");
 // --dir wajib dan tidak boleh di dalam public/: isi public/ ikut ter-deploy

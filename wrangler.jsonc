@@ -64,5 +64,40 @@
 			"binding": "UPLOADS",
 			"bucket_name": "rasa-medan-uploads"
 		}
-	]
+	],
+	// Staging/preview untuk branch selain `main` (mis. `dev`): Worker TERPISAH
+	// `rasa-medan-staging` dengan D1 & R2 sendiri — kode branch tidak pernah
+	// menyentuh data pelanggan production. Deploy: `npx wrangler deploy --env staging`
+	// (Workers Builds: deploy command non-production, lihat DEPLOYMENT.md §9).
+	// vars & binding TIDAK diwariskan dari atas, jadi ditulis ulang di sini.
+	// Rahasia staging: `npx wrangler secret put <NAMA> --env staging` (nilai BERBEDA
+	// dari production).
+	"env": {
+		"staging": {
+			"vars": {
+				"TRUST_CF_CONNECTING_IP": "1",
+				// Widget Turnstile yang sama boleh dipakai: tambahkan hostname
+				// rasa-medan-staging.<subdomain>.workers.dev di dashboard Turnstile.
+				"TURNSTILE_SITE_KEY": "0x4AAAAAAD5HvyDRwKtR2-nQ"
+			},
+			// PLACEHOLDER — `npx wrangler d1 create rasamedan-staging`, salin id-nya.
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "rasamedan-staging",
+					"database_id": "00000000-0000-0000-0000-000000000000",
+					"migrations_dir": "migrations"
+				}
+			],
+			// `npx wrangler r2 bucket create rasa-medan-uploads-staging` (tetap privat).
+			"r2_buckets": [
+				{
+					"binding": "UPLOADS",
+					"bucket_name": "rasa-medan-uploads-staging"
+				}
+			],
+			// URL preview per versi melewati WAF zona dan tidak diperlukan staging.
+			"preview_urls": false
+		}
+	}
 }

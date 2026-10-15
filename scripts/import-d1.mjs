@@ -17,7 +17,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { d1ExecFile, d1Query, targetFromArgs } from "./lib/d1.mjs";
+import { DB_NAME, d1ExecFile, d1Query, targetFromArgs } from "./lib/d1.mjs";
 
 const args = process.argv.slice(2);
 const fileIdx = args.indexOf("--file");
@@ -52,7 +52,7 @@ const DATA_TABLES = ["products", "product_variants", "orders", "order_items"];
 const count = (table) => Number(d1Query(`SELECT COUNT(*) AS n FROM ${table}`, target)[0]?.n ?? 0);
 
 try {
-  console.log(`→ Impor ${file} ke D1 ${target === "--remote" ? "REMOTE/production" : "lokal"}`);
+  console.log(`→ Impor ${file} ke D1 ${DB_NAME} (${target === "--remote" ? "REMOTE" : "lokal"})`);
   const nonEmpty = DATA_TABLES.filter((t) => count(t) > 0);
   if (nonEmpty.length > 0) {
     console.error(`❌ D1 tujuan sudah berisi data (${nonEmpty.join(", ")}) — impor dibatalkan.`);

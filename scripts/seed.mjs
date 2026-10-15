@@ -4,7 +4,8 @@
  * Kategori awal (kue/kering/sirup) sudah dibuat oleh migrations/0001_init.sql.
  *
  * Jalankan:  npm run seed      (HANYA D1 lokal; butuh `npm run db:migrate`)
- * `--remote` selalu ditolak: data dummy tidak pernah boleh masuk production
+ * Staging: `npm run seed -- --staging` (D1 rasamedan-staging, boleh dummy).
+ * `--remote` (production) selalu ditolak: data dummy tidak pernah boleh masuk production
  * (bentrok id/slug dengan impor data asli Skill 25).
  *
  * PENGAMAN: menolak jalan bila tabel products sudah berisi, agar data lokal
@@ -17,14 +18,15 @@
  * Alternatif tanpa Node (hanya mengganti produk dummy, aman diulang):
  *   npx wrangler d1 execute rasamedan --local --file db/seed/dummy-products.sql
  */
-import { d1ExecSql, d1Query, targetFromArgs } from "./lib/d1.mjs";
+import { STAGING, d1ExecSql, d1Query, targetFromArgs } from "./lib/d1.mjs";
 import { dummyInsertLines, readDummyProducts } from "./lib/dummy-seed.mjs";
 
 const target = targetFromArgs();
 
 // Data dummy hanya untuk D1 lokal: di production bisa menimpa/mengotori
 // katalog asli (dan impor file ke D1 remote tidak dijamin atomik).
-if (target === "--remote") {
+// Staging (`--staging`, D1 terpisah) boleh diisi data dummy.
+if (target === "--remote" && !STAGING) {
   console.error("❌ Seed data dummy tidak diizinkan ke D1 production (--remote).");
   process.exit(1);
 }

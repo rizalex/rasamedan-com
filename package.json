@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "db:migrate": "wrangler d1 migrations apply rasamedan --local && wrangler d1 execute rasamedan --local --command \"CREATE TABLE IF NOT EXISTS _local_dev (note TEXT)\"",
     "db:migrate:remote": "wrangler d1 migrations apply rasamedan --remote",
+    "db:migrate:staging": "wrangler d1 migrations apply rasamedan-staging --remote --env staging",
     "db:export": "node --env-file=.env scripts/export-mysql.mjs",
     "db:import": "node scripts/import-d1.mjs",
     "db:convert": "node scripts/convert-phpmyadmin.mjs",
@@ -23,6 +24,7 @@
     "deploy": "node scripts/check-deploy-env.mjs && npm run cf:build && opennextjs-cloudflare deploy",
     "cf:dryrun": "npm run cf:build && wrangler deploy --dry-run --outdir .wrangler/dry-run",
     "cf:build": "opennextjs-cloudflare build && node scripts/strip-bundle-secrets.mjs",
+    "ci:build": "node scripts/ci-build.mjs",
     "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv --include-runtime=false --strict-vars=false --env-file .dev.vars.example",
     "uploads:r2": "node scripts/upload-to-r2.mjs"
   },
