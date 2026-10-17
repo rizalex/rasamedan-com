@@ -21,6 +21,12 @@ const isProduction = branch === "" || branch === "main";
 const env = { ...process.env };
 
 if (!isProduction) {
+  // Dashboard "Previews Base" tidak bisa membatasi branch: hanya `dev` yang
+  // boleh di-deploy ke staging, branch lain gagal di sini.
+  if (branch !== "dev") {
+    console.error(`❌ Branch "${branch}" tidak di-deploy (hanya main → production, dev → staging).`);
+    process.exit(1);
+  }
   const staging = process.env.STAGING_SITE_URL ?? "";
   let url = null;
   try {
