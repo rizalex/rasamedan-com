@@ -216,7 +216,8 @@ Lalu:
 - Workers Builds: aktifkan non-production branch builds dengan deploy command
   `npx wrangler deploy --env staging` (tabel di atas). Push ke `dev` → staging
   ter-deploy; merge ke `main` → production.
-- Batasi *branch include* non-production ke `dev` saja (bukan semua branch).
+- Tab **Previews Base** tidak punya filter branch; `ci:build` menggagalkan build
+  branch selain `main`/`dev`, jadi hanya `dev` yang ter-deploy ke staging.
   **Wajib** cek deploy command non-production = `npx wrangler deploy --env staging`;
   default Cloudflare (`npx wrangler versions upload`) mengunggah kode branch sebagai
   versi Worker **production** (D1/R2/secret production).

@@ -85,7 +85,7 @@
 				{
 					"binding": "DB",
 					"database_name": "rasamedan-staging",
-					"database_id": "00000000-0000-0000-0000-000000000000",
+					"database_id": "e96daaaf-78fc-4ddc-8fb6-61ed3dfd2c40",
 					"migrations_dir": "migrations"
 				}
 			],
