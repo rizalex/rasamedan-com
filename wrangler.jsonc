@@ -42,6 +42,19 @@
 	"build": {
 		"command": "node scripts/strip-bundle-secrets.mjs"
 	},
+	// Domain production (cutover Skill 30, 17 Okt 2026). Custom domain = DNS &
+	// sertifikat dikelola Cloudflare; jangan buat record A/CNAME untuk nama ini.
+	// www dialihkan ke domain utama oleh Redirect Rule zona (DEPLOYMENT.md §11.3 C8).
+	"routes": [
+		{ "pattern": "rasamedan.com", "custom_domain": true },
+		{ "pattern": "www.rasamedan.com", "custom_domain": true }
+	],
+	// Wajib eksplisit: dengan `routes`, wrangler menganggap workers_dev=false dan
+	// mematikan URL workers.dev saat deploy. Tetap aktif selama observasi 48 jam;
+	// ubah ke false di Fase E (DEPLOYMENT.md §11.5).
+	"workers_dev": true,
+	// URL preview per versi melewati WAF zona; tidak dipakai (staging = Worker sendiri).
+	"preview_urls": false,
 	// Database D1 (Skill 24). `database_id` di bawah adalah PLACEHOLDER: cukup
 	// untuk D1 lokal (`next dev`, `npm run preview`, `npm run db:migrate`), tetapi
 	// `npm run deploy` menolak jalan sampai diganti. Pemilik: jalankan
@@ -80,7 +93,7 @@
 				// rasa-medan-staging.<subdomain>.workers.dev di dashboard Turnstile.
 				"TURNSTILE_SITE_KEY": "0x4AAAAAAD5HvyDRwKtR2-nQ"
 			},
-			// PLACEHOLDER — `npx wrangler d1 create rasamedan-staging`, salin id-nya.
+			// D1 staging (`npx wrangler d1 create rasamedan-staging`).
 			"d1_databases": [
 				{
 					"binding": "DB",
@@ -96,6 +109,9 @@
 					"bucket_name": "rasa-medan-uploads-staging"
 				}
 			],
+			// `routes` DIWARISKAN dari atas: kosongkan agar staging tidak pernah
+			// mengambil alih rasamedan.com (staging hanya di workers.dev).
+			"routes": [],
 			// URL preview per versi melewati WAF zona dan tidak diperlukan staging.
 			"preview_urls": false
 		}
