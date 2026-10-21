@@ -4,6 +4,7 @@ import { consumeRateLimit, refundRateLimit } from "@/lib/rate-limit";
 import { verifyCaptcha } from "@/lib/turnstile";
 import { dbErrorMessage } from "@/lib/db";
 import { parseIncomingItems, resolveCheckoutItems, totalWeightGrams } from "@/lib/checkout-items";
+import { getDisabledCourierCodes, isApiCourierAllowed } from "@/lib/courier-settings";
 import {
   describeDistrict,
   fetchRates,
@@ -46,12 +47,15 @@ function tooMany(retryAfterSec: number) {
   );
 }
 
-function ratesResponse(weightGrams: number, value: CachedRates) {
-  if (value.rates.length === 0) return unavailable("NOT_SERVED");
+function ratesResponse(weightGrams: number, value: CachedRates, disabled: Set<string>) {
+  // Kurir yang dinonaktifkan admin (Skill 32) disaring saat dibaca, bukan saat
+  // disimpan ke cache — perubahan pengaturan langsung berlaku.
+  const rates = value.rates.filter((r) => isApiCourierAllowed(r.courierCode, disabled));
+  if (rates.length === 0) return unavailable("NOT_SERVED");
   return NextResponse.json({
     available: true,
     weightGrams,
-    rates: value.rates,
+    rates,
     quotedAt: value.fetchedAt,
   });
 }
@@ -94,9 +98,10 @@ export async function POST(req: Request) {
     const bucket = weightBucket(grams);
     if (bucket === null) return unavailable("TOO_HEAVY");
 
+    const disabled = await getDisabledCourierCodes();
     // Cache hit: tanpa captcha, tanpa biaya.
     const cached = await readCachedRates(cfg.origin, district.code, bucket);
-    if (cached) return ratesResponse(bucket, cached);
+    if (cached) return ratesResponse(bucket, cached, disabled);
 
     if (await isCircuitOpen()) return unavailable("UNAVAILABLE");
 
@@ -133,7 +138,7 @@ export async function POST(req: Request) {
       await refundRateLimit("shipquote:all", daily.stamp);
       return unavailable("UNAVAILABLE");
     }
-    return ratesResponse(bucket, fetched.value);
+    return ratesResponse(bucket, fetched.value, disabled);
   } catch (err) {
     console.error("POST /api/shipping/rates gagal:", dbErrorMessage(err));
     return unavailable("UNAVAILABLE");

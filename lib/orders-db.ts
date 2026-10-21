@@ -27,7 +27,9 @@ export type AdminOrder = {
   /** Pengiriman (Skill 22): kode di lib/couriers.mjs & nomor resi, null bila belum. */
   courier_code: string | null;
   waybill: string | null;
-  /** Estimasi ongkir pilihan pelanggan (Skill 31), null bila tidak ada. */
+  /** Estimasi ongkir pilihan pelanggan (Skill 31), null bila tidak ada.
+   *  shipping_courier = courier_code api.co.id pilihan pelanggan. */
+  shipping_courier: string | null;
   shipping_service: string | null;
   shipping_etd: string | null;
   shipping_estimate: number | null;
@@ -61,7 +63,7 @@ export async function getAdminOrders(filter: {
   const orders = await query<OrderRow>(
     `SELECT id, order_code, recipient_name, phone, fulfillment_method,
             address, city, location_note, note, status, total_estimate, created_at,
-            courier_code, waybill, shipping_service, shipping_etd, shipping_estimate
+            courier_code, waybill, shipping_courier, shipping_service, shipping_etd, shipping_estimate
        FROM orders ${whereSql}
       ORDER BY created_at DESC, id DESC
       LIMIT 200`,

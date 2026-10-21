@@ -1,6 +1,7 @@
 import { dbErrorMessage, execute, placeholders, query } from "@/lib/db";
 import { apiCoIdGet, hasApiCoIdKey, type ApiCoIdErrorKind } from "@/lib/api-co-id";
 import type { ShippingRate, ShippingSnapshot } from "@/lib/orders";
+import { getDisabledCourierCodes, isApiCourierAllowed } from "@/lib/courier-settings";
 
 /**
  * Estimasi ongkir (Skill 31) — SERVER-ONLY. Konfigurasi, cache D1
@@ -334,10 +335,16 @@ export async function resolveOrderShipping(
 
   const base = { districtCode: district.code, districtLabel: district.label };
   const bucket = weightGrams === null ? null : weightBucket(weightGrams);
-  const cached =
+  const raw =
     cfg.enabled && bucket !== null
       ? await readCachedRates(cfg.origin, district.code, bucket, RATE_ORDER_GRACE_MS)
       : null;
+  // Hanya kurir yang aktif di pengaturan admin (Skill 32), sama seperti /api/shipping/rates.
+  let cached = raw;
+  if (raw && raw.rates.length > 0) {
+    const disabled = await getDisabledCourierCodes();
+    cached = { ...raw, rates: raw.rates.filter((r) => isApiCourierAllowed(r.courierCode, disabled)) };
+  }
   const courierCode = str(input.courierCode, 30);
   const serviceCode = str(input.serviceCode, 40);
 

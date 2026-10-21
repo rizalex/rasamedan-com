@@ -1,5 +1,5 @@
 # SKILLS.md — Rasa Medan
-## Modul Kerja untuk Claude Code (Skill 1–31)
+## Modul Kerja untuk Claude Code (Skill 1–32)
 
 Satu-satunya daftar skill proyek ini. Per 12 Oktober 2026 file ini menggabungkan `SKILLS.md` lama (Skill 1–12) dan `SKILLS-ADDENDUM.md` (Skill 13–19), lalu menambahkan gerbang review (Skill 20–21) dan pelacakan pengiriman (Skill 22). Per 13 Oktober 2026 ditambahkan BAGIAN E: migrasi infrastruktur dari cPanel ke Cloudflare Workers (Skill 23–30).
 
@@ -49,6 +49,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 29 | Environment, config & build CI | 🟡 Dokumen & kode selesai (14 Okt 2026), AC belum tuntas sampai pemilik merotasi `ADMIN_SESSION_SECRET` (21.2 no. 1): `DEPLOYMENT.md` Cloudflare (versi cPanel diarsip), `.env.example` baru, checklist 21.3 Cloudflare, deploy guard + peringatan WA dummy. ⏳ Pemilik: rotasi secret via `wrangler secret put`, deploy uji workers.dev, (opsional) Workers Builds. Rincian 29a |
 | 30 | Cutover & pensiun cPanel (BAGIAN E) | 🟡 Runbook lengkap di `DEPLOYMENT.md` §11 (14 Okt 2026): persiapan DNS/email, gladi data, latihan domain, hari H berurutan, rollback, penguncian H+2, arsip H+30. ⏳ Eksekusi oleh pemilik (butuh akun Cloudflare & cPanel) |
 | 31 | Estimasi ongkir mandiri di checkout (api.co.id) | 🟡 Kode selesai di `dev` (21 Okt 2026, 31c): migrasi 0004, `/api/shipping/{locations,rates}`, pilihan kurir di checkout, snapshot di pesanan/WA/admin; review & audit bersih dari Kritis/Tinggi. ⏳ Uji staging (secret `API_CO_ID_KEY --env staging`, migrasi staging) → production |
+| 32 | Pengaturan kurir agen & resi otomatis | 🟡 Kode selesai di `dev` (21 Okt 2026, 32a). ⏳ Uji staging → production |
 
 ---
 
@@ -1119,4 +1120,30 @@ Sampel tersanitasi: `docs/api-co-id-rates-sample.json`, `docs/api-co-id-location
 
 ---
 
-*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 32, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*
+## Skill 32 — Pengaturan Kurir Agen & Resi Otomatis
+
+**Tujuan:** (permintaan pemilik 21 Okt 2026) admin memilih kurir agen yang dipakai toko; kolom kurir resi di admin terisi otomatis dari pilihan ongkir pelanggan; daftar kurir lacak dilengkapi.
+
+**Langkah:**
+1. `lib/couriers.mjs`: tambah J&T Cargo, SAP Express, Paxel, SPX Express (URL lacak resmi diverifikasi HTTP 200) + field `apiCode` (pemetaan `courier_code` api.co.id) + `findCourierByApiCode`.
+2. Migrasi `0005_courier_settings.sql`: `courier_settings (code PK, enabled, updated_at)`; tanpa baris = aktif.
+3. `lib/courier-settings.ts`, `PATCH /api/admin/couriers` (sesi admin; "Kurir lain" tidak bisa dinonaktifkan), halaman `/admin/kurir` + menu "Kurir".
+4. Estimasi ongkir: kurir nonaktif disaring saat **dibaca** (`/api/shipping/rates` & `resolveOrderShipping`), bukan saat disimpan ke cache → perubahan langsung berlaku.
+5. `ShipmentForm`: label "Kurir dikirim" / "No. resi pengiriman"; bila resi belum diisi, kurir terisi dari pilihan pelanggan (dengan petunjuk "ganti bila berbeda"); pilihan = kurir aktif + kurir yang sudah tersimpan.
+
+**Acceptance Criteria:**
+- [x] Menonaktifkan JNE → JNE hilang dari tarif checkout; pesanan dengan pilihan JNE → snapshot NULL + `shippingDropped` (uji lokal)
+- [x] `/admin/kurir` hanya untuk admin (tanpa sesi → redirect login; API → 401); "Kurir lain" → 400
+- [x] Pesanan dengan pilihan JNE → form resi terisi JNE + petunjuk (uji lokal)
+- [ ] Uji staging: migrasi 0005, halaman Kurir, toggle, checkout
+
+### 32a — Catatan pelaksanaan (21 Okt 2026)
+- Kurir api.co.id yang belum ada di `lib/couriers.mjs` tetap tampil di estimasi (tidak bisa diatur sampai ditambahkan).
+- Pos Indonesia tidak ada di api.co.id: tetap bisa dipilih untuk resi, tidak muncul di estimasi.
+- Minimal satu kurir **ber-tarif** (punya `apiCode`) tetap aktif — dicek di server (`PATCH /api/admin/couriers` → 400) dan UI (review 32).
+- `getDisabledCourierCodes` fail-open: gagal baca (mis. migrasi 0005 belum diterapkan) → semua aktif, checkout & daftar pesanan tetap jalan (audit 32). Tetap jalankan migrasi **sebelum** deploy kode.
+- Migrasi 0005 diterapkan ke staging 21 Okt 2026; production: `npm run db:migrate:remote` sebelum merge ke `main`.
+
+---
+
+*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 33, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*

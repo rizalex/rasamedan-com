@@ -130,6 +130,8 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 - **Kelola Produk**: tambah/edit/hapus produk, upload 1 foto, atur harga, kategori, variasi, deskripsi, label halal, dan **status stok** (Tersedia/Terbatas/Pre-order/Tanya Stok).
 - **Kelola Pesanan**: daftar semua pesanan masuk, detail item & data pelanggan, ubah status pesanan (sesuai alur di 2.1).
 - Pencarian/filter pesanan berdasarkan status atau nomor HP/Order ID.
+- **Kurir dikirim & resi** (Skill 22/32): untuk pesanan kurir, admin mencatat kurir yang benar-benar dipakai + nomor resi. Kurir terisi otomatis dari pilihan ongkir pelanggan (bisa diganti bila berubah saat konfirmasi WhatsApp).
+- **Pengaturan Kurir** (Skill 32): admin mengaktifkan/menonaktifkan kurir agen yang dipakai toko. Kurir nonaktif tidak muncul di estimasi ongkir checkout dan pilihan kurir resi; "Kurir lain" selalu tersedia.
 
 ### 3.8 Multi-bahasa (ID/EN)
 - Toggle bahasa di header, default Bahasa Indonesia.
@@ -153,7 +155,7 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 - **Asal:** kecamatan toko (konfigurasi deploy). Paket diantar sendiri ke agen kurir (drop-off).
 - **Tujuan:** pelanggan memilih Provinsi → Kota/Kab → Kecamatan (data wilayah api.co.id).
 - **Berat:** jumlah berat produk/varian × jumlah di keranjang (tanpa tambahan kemasan), dibulatkan ke atas per 100 g.
-- **Kurir:** semua kurir/layanan yang dikembalikan api.co.id (kecuali COD). Harga ditampilkan **dibulatkan ke atas ke Rp 1.000**.
+- **Kurir:** semua kurir yang **aktif di Pengaturan Kurir admin** (§3.7; default semua aktif), layanan Standard & Nextday saja. Harga ditampilkan **dibulatkan ke atas ke Rp 1.000**.
 - **Pilihan wajib:** bila estimasi tersedia, pelanggan **wajib memilih satu kurir/layanan**; harganya masuk ke **estimasi total** di ringkasan checkout dan pesan WhatsApp.
 - **Fallback:** bila estimasi tidak tersedia (API gagal, saldo habis, batas harian tercapai, berat produk belum diisi), checkout tetap berjalan dan pesan WhatsApp berisi "Ongkir: dikonfirmasi via WhatsApp".
 - **Bukan tagihan final:** ongkir final & pembayaran tetap dikonfirmasi pemilik via WhatsApp; status pesanan §2.1 tidak berubah.
