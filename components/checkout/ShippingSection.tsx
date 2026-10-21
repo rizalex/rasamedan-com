@@ -63,7 +63,9 @@ export default function ShippingSection({
   const [captchaToken, setCaptchaToken] = useState("");
   const captcha = useRef<CaptchaHandle>(null);
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
 
   // Laporkan status ke induk setiap kali pilihan berubah.
   useEffect(() => {

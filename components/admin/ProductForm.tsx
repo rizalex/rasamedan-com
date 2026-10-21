@@ -47,10 +47,11 @@ export default function ProductForm({
   });
   // Kunci baris dari counter (bukan acak/indeks) agar React tidak salah
   // mencocokkan input saat baris dihapus atau dipindah.
-  const nextKey = useRef(0);
+  // Baris awal memakai indeks 0..n-1; baris baru melanjutkan dari n.
+  const nextKey = useRef(product?.variants?.length ?? 0);
   const [variants, setVariants] = useState<VariantRow[]>(() =>
-    (product?.variants ?? []).map((v) => ({
-      key: nextKey.current++,
+    (product?.variants ?? []).map((v, i) => ({
+      key: i,
       name: v.name,
       price_delta: v.price_delta ? String(v.price_delta) : "",
       weight_grams: v.weight_grams ? String(v.weight_grams) : "",

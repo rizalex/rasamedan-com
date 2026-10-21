@@ -63,7 +63,9 @@ export default function CaptchaWidget({
   const widgetId = useRef<string | null>(null);
   // Callback terbaru tanpa me-render ulang widget saat fungsi induk berubah.
   const onTokenRef = useRef(onToken);
-  onTokenRef.current = onToken;
+  useEffect(() => {
+    onTokenRef.current = onToken;
+  });
 
   useImperativeHandle(ref, () => ({
     reset() {
