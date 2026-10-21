@@ -9,6 +9,7 @@ const STOCK = ["tersedia", "terbatas", "pre-order", "tanya-stok"];
 const MAX_VARIANTS = 20;
 const MAX_PRICE_DELTA = 100_000_000;
 const MAX_VARIANT_WEIGHT = 100_000;
+const MAX_PRODUCT_WEIGHT = 50_000;
 // Aset statis /images/... ; foto /uploads/... mengikuti aturan route R2 (Skill 27).
 const STATIC_IMAGE = /^\/images\/[A-Za-z0-9._\/-]{1,200}$/;
 
@@ -90,6 +91,9 @@ export function validateProductInput(
     return { ok: false, error: "Harga tidak valid" };
   if (!Number.isFinite(weight_grams) || weight_grams <= 0)
     return { ok: false, error: "Berat produk wajib diisi (gram, lebih dari 0)" };
+  // Batas wajar (estimasi ongkir Skill 31 maks 30 kg per pesanan).
+  if (weight_grams > MAX_PRODUCT_WEIGHT)
+    return { ok: false, error: "Berat produk maksimal 50.000 gram" };
   if (!STOCK.includes(stock_status))
     return { ok: false, error: "Status stok tidak valid" };
 

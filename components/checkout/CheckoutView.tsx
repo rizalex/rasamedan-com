@@ -10,9 +10,17 @@ import { formatOrderMessage, type FulfillmentMethod, type OrderConfirmation } fr
 import { IconWhatsApp, IconCheck } from "@/components/ui/icons";
 import CaptchaWidget, { type CaptchaHandle } from "@/components/security/CaptchaWidget";
 import { captchaErrorKey } from "@/lib/captcha-errors";
+import ShippingSection, { INITIAL_SHIPPING, type ShippingState } from "./ShippingSection";
 import styles from "./CheckoutView.module.css";
 
-export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: string }) {
+export default function CheckoutView({
+  captchaSiteKey,
+  shippingEnabled,
+}: {
+  captchaSiteKey: string;
+  /** Estimasi ongkir api.co.id aktif (Skill 31); false = input teks kecamatan/kota lama. */
+  shippingEnabled: boolean;
+}) {
   const { t } = useI18n();
   const { items, hydrated, subtotal, totalWeight, clear, removeItem } = useCart();
 
@@ -36,11 +44,17 @@ export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: strin
     needsVariant: boolean;
   } | null>(null);
   const [captchaToken, setCaptchaToken] = useState("");
+  const [shipping, setShipping] = useState<ShippingState>(INITIAL_SHIPPING);
+  // Pilihan wilayah dipakai bila fitur aktif dan data wilayah berhasil dimuat.
+  const useRegionPicker = method === "kurir" && shippingEnabled && !shipping.fallback;
+  const shippingPrice = method === "kurir" ? (shipping.selected?.price ?? null) : null;
   const [success, setSuccess] = useState<{
     order: OrderConfirmation;
     waLink: string;
     /** Total server berbeda dari subtotal keranjang (harga diperbarui admin). */
     priceChanged: boolean;
+    /** Pilihan kurir tidak bisa diverifikasi server → ongkir via WhatsApp. */
+    shippingDropped: boolean;
   } | null>(
     null
   );
@@ -96,8 +110,15 @@ export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: strin
       setError(t("checkout.errRequired"));
       return;
     }
-    if (method === "kurir" && (!form.address.trim() || !form.city.trim())) {
+    if (
+      method === "kurir" &&
+      (!form.address.trim() || (useRegionPicker ? !shipping.districtCode : !form.city.trim()))
+    ) {
       setError(t("checkout.errAddress"));
+      return;
+    }
+    if (useRegionPicker && shipping.mustSelect && !shipping.selected) {
+      setError(t("checkout.shipping.errChoose"));
       return;
     }
     if (captchaEnabled && !captchaToken) {
@@ -115,7 +136,14 @@ export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: strin
           recipient_name: form.recipient_name,
           phone: form.phone,
           address: method === "kurir" ? form.address : null,
-          city: method === "kurir" ? form.city : null,
+          city: method === "kurir" && !useRegionPicker ? form.city : null,
+          shipping: useRegionPicker
+            ? {
+                districtCode: shipping.districtCode,
+                courierCode: shipping.selected?.courierCode ?? null,
+                serviceCode: shipping.selected?.serviceCode ?? null,
+              }
+            : null,
           location_note: method === "kurir" ? form.location_note : null,
           note: form.note,
           captchaToken,
@@ -135,7 +163,11 @@ export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: strin
             ? t(captchaKey)
             : res.status === 409 && data.code
               ? itemErrorMessage(data)
-              : data.error ?? t("checkout.errGeneric")
+              : data.code === "SHIPPING_REQUIRED"
+                ? t("checkout.shipping.errChoose")
+                : data.code === "SHIPPING_DISTRICT_INVALID"
+                  ? t("checkout.shipping.errDistrict")
+                  : data.error ?? t("checkout.errGeneric")
         );
         resetCaptcha();
         setSubmitting(false);
@@ -148,18 +180,25 @@ export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: strin
         recipient_name: form.recipient_name,
         phone: form.phone,
         address: form.address,
-        city: form.city,
+        // Label kecamatan & ongkir versi server (bukan pilihan klien).
+        city: data.city ?? form.city,
         location_note: form.location_note,
         note: form.note,
         items: data.items,
         total_estimate: data.total_estimate,
+        shipping: data.shipping ?? null,
       };
       const waLink = buildWaLink(formatOrderMessage(order));
 
       // Data sudah tersimpan di DB (respons OK) SEBELUM membuka WhatsApp.
       clear();
       // Total final selalu dari server; beri tahu bila berbeda dari keranjang.
-      setSuccess({ order, waLink, priceChanged: data.total_estimate !== subtotal });
+      setSuccess({
+        order,
+        waLink,
+        priceChanged: data.total_estimate !== subtotal,
+        shippingDropped: Boolean(data.shippingDropped),
+      });
       // Coba buka WhatsApp otomatis (best-effort; tombol manual tetap tersedia).
       window.open(waLink, "_blank", "noopener");
     } catch {
@@ -184,6 +223,11 @@ export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: strin
           <p className={styles.orderId}>
             {t("checkout.orderId")}: <strong>{success.order.order_code}</strong>
           </p>
+          {success.shippingDropped && (
+            <p className={styles.notice} role="status">
+              {t("checkout.shipping.dropped")}
+            </p>
+          )}
           {success.priceChanged && (
             <p className={styles.notice} role="status">
               {t("checkout.pricesUpdated").replace(
@@ -278,14 +322,26 @@ export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: strin
                 required
               />
             </label>
-            <label className={styles.field}>
-              <span>{t("checkout.city")} *</span>
-              <input
-                value={form.city}
-                onChange={(e) => update("city", e.target.value)}
-                required
+            {useRegionPicker ? (
+              <ShippingSection
+                captchaSiteKey={captchaSiteKey}
+                items={items.map((it) => ({
+                  productId: it.productId,
+                  variant: it.variant,
+                  quantity: it.quantity,
+                }))}
+                onChange={setShipping}
               />
-            </label>
+            ) : (
+              <label className={styles.field}>
+                <span>{t("checkout.city")} *</span>
+                <input
+                  value={form.city}
+                  onChange={(e) => update("city", e.target.value)}
+                  required
+                />
+              </label>
+            )}
             <label className={styles.field}>
               <span>{t("checkout.locationNote")}</span>
               <input
@@ -327,7 +383,28 @@ export default function CheckoutView({ captchaSiteKey }: { captchaSiteKey: strin
               <span>{formatWeight(totalWeight)}</span>
             </div>
           )}
-          <p className={styles.note}>{t("cart.shippingNote")}</p>
+          {shippingPrice !== null && shipping.selected && (
+            <>
+              <div className={styles.subtotalRow}>
+                <span>
+                  {t("checkout.shipping.estimate")} ({shipping.selected.courierName} ·{" "}
+                  {shipping.selected.serviceName})
+                </span>
+                <span>{formatRupiah(shippingPrice)}</span>
+              </div>
+              <div className={styles.subtotalRow}>
+                <span>{t("checkout.shipping.estimatedTotal")}</span>
+                <strong>{formatRupiah(subtotal + shippingPrice)}</strong>
+              </div>
+            </>
+          )}
+          <p className={styles.note}>
+            {method === "pickup"
+              ? t("checkout.pickupNoShipping")
+              : shippingPrice !== null
+                ? t("checkout.shipping.disclaimer")
+                : t("cart.shippingNote")}
+          </p>
         </div>
 
         <CaptchaWidget

@@ -48,7 +48,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 25 | Migrasi data & seed | ✅ Kode selesai (14 Okt 2026): `db:export` (MySQL → SQL D1), `db:import` (precheck + verifikasi), `db/seed/dummy-products.sql`; teruji dengan MariaDB sungguhan (zona waktu +07:00). ⏳ Ekspor/impor production dijalankan saat cutover (Skill 30). Rincian 25a |
 | 29 | Environment, config & build CI | 🟡 Dokumen & kode selesai (14 Okt 2026), AC belum tuntas sampai pemilik merotasi `ADMIN_SESSION_SECRET` (21.2 no. 1): `DEPLOYMENT.md` Cloudflare (versi cPanel diarsip), `.env.example` baru, checklist 21.3 Cloudflare, deploy guard + peringatan WA dummy. ⏳ Pemilik: rotasi secret via `wrangler secret put`, deploy uji workers.dev, (opsional) Workers Builds. Rincian 29a |
 | 30 | Cutover & pensiun cPanel (BAGIAN E) | 🟡 Runbook lengkap di `DEPLOYMENT.md` §11 (14 Okt 2026): persiapan DNS/email, gladi data, latihan domain, hari H berurutan, rollback, penguncian H+2, arsip H+30. ⏳ Eksekusi oleh pemilik (butuh akun Cloudflare & cPanel) |
-| 31 | Estimasi ongkir mandiri di checkout (api.co.id) | 🟡 Gerbang 31.0 lolos (21 Okt 2026, 31b): berat dalam kg, harga `normal_price`. ⏳ Keputusan pemilik lengkap (normal_price, tanpa Cargo, asal Beringin 120733) → siap 31.2 |
+| 31 | Estimasi ongkir mandiri di checkout (api.co.id) | 🟡 Kode selesai di `dev` (21 Okt 2026, 31c): migrasi 0004, `/api/shipping/{locations,rates}`, pilihan kurir di checkout, snapshot di pesanan/WA/admin; review & audit bersih dari Kritis/Tinggi. ⏳ Uji staging (secret `API_CO_ID_KEY --env staging`, migrasi staging) → production |
 
 ---
 
@@ -1105,6 +1105,17 @@ Sampel tersanitasi: `docs/api-co-id-rates-sample.json`, `docs/api-co-id-location
 7. **Error:** tujuan/asal salah → 422 "Tujuan/Asal tidak dilayani kurir."; berat <0,1 → 422 "must be at least 0.1"; >1000 → 422 "must not be greater than 1000"; tanpa key → "API key required…". Latensi tarif 0,3–3,1 dtk (panggilan pertama paling lambat) → timeout 6 dtk cukup.
 - [x] Gerbang lolos. **Keputusan pemilik (21 Okt 2026):** (a) harga = **`normal_price`**, dibulatkan ke atas ke Rp 1.000; (b) **tanpa layanan Cargo** — hanya `service_type` Standard & Nextday; (c) asal = **Kec. Beringin, Kab. Deli Serdang (kode pos 20552) → `SHIPPING_ORIGIN_DISTRICT_CODE=120733`** (kota `1207`). Cek: Beringin→Kemayoran 1 kg mengembalikan 8 layanan non-kargo (JNE REG Rp 30.000, J&T EZ Rp 24.000, SiCepat REG Rp 28.000, …).
 - ⚠️ API key Live sempat ditempel di chat saat uji → **rotasi key di dashboard api.co.id** sebelum dipasang sebagai secret.
+
+---
+
+### 31c — Catatan pelaksanaan (21 Okt 2026)
+- **File baru:** `migrations/0004_shipping_estimate.sql` (tanpa CHECK constraint — validasi di aplikasi), `lib/api-co-id.ts`, `lib/shipping.ts`, `lib/checkout-items.ts` (validasi item diekstrak dari `/api/orders`, perilaku sama), `app/api/shipping/locations/route.ts`, `app/api/shipping/rates/route.ts`, `components/checkout/ShippingSection.tsx`.
+- **Penyederhanaan dari rancangan:** body rates & order cukup `districtCode` (kota/provinsi diturunkan dari prefiks kode 4/2 digit, diverifikasi lewat keanggotaan cache); `sender_type` tetap `dropped` di kode (tanpa var `SHIPPING_SENDER_TYPE`); tanpa allowlist kurir; `is_cod` diabaikan.
+- **Pilihan wajib:** server menolak pesanan tanpa pilihan kurir (`SHIPPING_REQUIRED`, kuota dikembalikan) bila cache tarif untuk tujuan + berat itu ada; pilihan yang tidak cocok dengan cache (kedaluwarsa/berat berubah) → snapshot NULL + `shippingDropped`.
+- **Temuan review diperbaiki:** 429 lokasi → fallback ke input teks (checkout tidak buntu); `SHIPPING_REQUIRED`/`SHIPPING_DISTRICT_INVALID` mengembalikan kuota pesanan; cache negatif hanya untuk 422.
+- **Temuan audit diperbaiki:** rate limit `shiprates` dipindah ke jalur cache-miss (cache hit & body sampah tidak menulis D1); 429 dari endpoint wilayah tidak membuka circuit tarif. **Diterima (keputusan pemilik):** batas harian 100 bisa dihabiskan penyerang bermodal pemecah captcha → pelanggan jatuh ke "ongkir via WhatsApp" (biaya tetap maks Rp 500/hari). Naikkan `SHIPPING_RATES_DAILY_CAP` bila sering tercapai (log `batas harian cek ongkir tercapai`). WAF `/api/shipping/*` ditambahkan ke DEPLOYMENT §8.
+- **Uji lokal (Live Key):** lokasi 3 level, tarif Beringin→Kemayoran 1,3 kg (bucket 1.300 g, 8+ layanan non-kargo), cache hit, pesanan dengan pilihan valid/palsu/kosong, kecamatan salah, input teks lama; UI 375 px. `cf:dryrun`: 1,09 MiB gzip; `API_CO_ID` tidak ada di aset klien.
+- **⚠️ Ditemukan saat build:** OpenNext menolak Next.js 15 mulai 21 Okt 2026 (lewat masa dukungan 2 tahun) — `npm run cf:build` gagal tanpa `--dangerouslyUseUnsupportedNextVersion`. Berlaku untuk SEMUA build (CI juga), bukan hanya Skill 31 → perlu keputusan pemilik: upgrade ke Next.js 16 (disarankan) atau flag sementara.
 
 ---
 

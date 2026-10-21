@@ -113,6 +113,13 @@ export default async function AdminOrdersPage({
                     {o.total_estimate != null
                       ? formatRupiah(o.total_estimate)
                       : "-"}
+                    {o.fulfillment_method === "kurir" && (
+                      <div className={styles.hint}>
+                        {o.shipping_estimate != null
+                          ? `+ ongkir ±${formatRupiah(o.shipping_estimate)} · ${o.shipping_service ?? "-"}${o.shipping_etd ? ` (${o.shipping_etd} hari)` : ""}`
+                          : "Ongkir: konfirmasi via WA"}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <OrderStatusSelect

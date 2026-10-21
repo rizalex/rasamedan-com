@@ -4,11 +4,16 @@ import {
   dbErrorMessage,
   execute,
   isUniqueViolation,
-  placeholders,
   query,
   statement,
 } from "@/lib/db";
-import type { CheckoutItem, FulfillmentMethod } from "@/lib/orders";
+import type { FulfillmentMethod } from "@/lib/orders";
+import {
+  parseIncomingItems,
+  resolveCheckoutItems,
+  totalWeightGrams,
+} from "@/lib/checkout-items";
+import { resolveOrderShipping } from "@/lib/shipping";
 import { verifyCaptcha } from "@/lib/turnstile";
 import { getClientIp, rateLimitKeyFromIp } from "@/lib/client-ip";
 import { isValidPhone, normalizePhone } from "@/lib/phone.mjs";
@@ -33,8 +38,6 @@ function tooManyOrders(retryAfterSec: number) {
 
 export const dynamic = "force-dynamic";
 
-type IncomingItem = { productId: number; variant: string | null; quantity: number };
-
 /** Tanggal WIB (Asia/Jakarta) dalam format YYYYMMDD untuk Order ID. */
 function dateWibYYYYMMDD(): string {
   const s = new Intl.DateTimeFormat("en-CA", {
@@ -44,33 +47,6 @@ function dateWibYYYYMMDD(): string {
     day: "2-digit",
   }).format(new Date());
   return s.replace(/-/g, "");
-}
-
-interface ProductRow {
-  id: number;
-  name: string;
-  price: number;
-  weight_grams: number;
-}
-
-interface VariantRow {
-  product_id: number;
-  name: string;
-  price_delta: number;
-  weight_grams: number;
-}
-
-/**
- * Error item keranjang dengan kode terstruktur, agar klien bisa menampilkan
- * pesan sesuai bahasa aktif dan menawarkan "hapus dari keranjang".
- */
-function itemError(
-  code: "PRODUCT_NOT_FOUND" | "VARIANT_INVALID" | "VARIANT_REQUIRED",
-  error: string,
-  productId: number,
-  variant: string | null
-) {
-  return NextResponse.json({ error, code, productId, variant }, { status: 409 });
 }
 
 // Cek status pesanan dipindah ke POST /api/orders/lookup (Skill 21): nomor HP
@@ -95,10 +71,16 @@ export async function POST(req: Request) {
   const recipientName = String(body.recipient_name ?? "").trim();
   const phone = String(body.phone ?? "").trim();
   const address = body.address ? String(body.address).trim() : null;
-  const city = body.city ? String(body.city).trim() : null;
+  let city = body.city ? String(body.city).trim() : null;
   const locationNote = body.location_note ? String(body.location_note).trim() : null;
   const note = body.note ? String(body.note).trim() : null;
-  const rawItems = Array.isArray(body.items) ? (body.items as IncomingItem[]) : [];
+  // Estimasi ongkir pilihan pelanggan (Skill 31): hanya kode; harga dicocokkan
+  // server dengan cache tarifnya sendiri.
+  const shippingInput =
+    method === "kurir" && body.shipping && typeof body.shipping === "object"
+      ? (body.shipping as { districtCode?: unknown; courierCode?: unknown; serviceCode?: unknown })
+      : null;
+  const hasDistrict = typeof shippingInput?.districtCode === "string" && shippingInput.districtCode !== "";
   const captchaToken = String(body.captchaToken ?? "").trim();
   const ip = getClientIp(req);
   const ipKey = rateLimitKeyFromIp(ip);
@@ -154,37 +136,16 @@ export async function POST(req: Request) {
   if (!isValidPhone(phoneNorm)) {
     return NextResponse.json({ error: "Nomor HP tidak valid" }, { status: 400 });
   }
-  if (method === "kurir" && (!address || !city)) {
+  // Kecamatan dari pilihan wilayah (Skill 31) menggantikan teks kecamatan/kota.
+  if (method === "kurir" && (!address || (!city && !hasDistrict))) {
     return NextResponse.json(
       { error: "Alamat dan kecamatan/kota wajib diisi untuk pengiriman kurir" },
       { status: 400 }
     );
   }
-  if (rawItems.length === 0) {
-    return NextResponse.json({ error: "Keranjang kosong" }, { status: 400 });
-  }
-  // Batas jumlah baris dicek pada array mentah, sebelum diproses.
-  if (rawItems.length > 50) {
-    return NextResponse.json(
-      { error: "Maksimal 50 baris item per pesanan" },
-      { status: 400 }
-    );
-  }
-  const items = rawItems.map((it) => ({
-    productId: Number(it?.productId),
-    variant: it?.variant ? String(it.variant).slice(0, 100) : null,
-    quantity: Number(it?.quantity),
-  }));
-  // Baris tidak valid DITOLAK, bukan dibuang diam-diam (agar item pelanggan
-  // tidak hilang dari pesanan tanpa pemberitahuan).
-  if (items.some((it) => !Number.isInteger(it.productId))) {
-    return NextResponse.json({ error: "Ada item yang tidak valid" }, { status: 400 });
-  }
-  if (items.some((it) => !Number.isInteger(it.quantity) || it.quantity < 1 || it.quantity > 99)) {
-    return NextResponse.json(
-      { error: "Jumlah per item harus 1–99" },
-      { status: 400 }
-    );
+  const parsedItems = parseIncomingItems(body.items);
+  if (!parsedItems.ok) {
+    return NextResponse.json({ error: parsedItems.error }, { status: 400 });
   }
 
   // 3) Ambil satu jatah kuota secara atomik (cek + catat dalam satu INSERT
@@ -196,79 +157,13 @@ export async function POST(req: Request) {
   if (quota.limited) return tooManyOrders(quota.retryAfterSec);
 
   try {
-    // Ambil nama & harga produk dari DB (jangan percaya harga dari client).
-    // Maks 50 id unik (batas baris di atas) — di bawah batas 100 parameter D1.
-    const ids = [...new Set(items.map((it) => it.productId))];
-    const idPlaceholders = placeholders(ids.length);
-    const productRows = await query<ProductRow>(
-      `SELECT id, name, price, weight_grams FROM products WHERE id IN (${idPlaceholders})`,
-      ids
-    );
-    const byId = new Map(productRows.map((p) => [p.id, p]));
-
-    // Varian per produk: selisih harga & berat (override). Dicocokkan per nama.
-    const variantRows = await query<VariantRow>(
-      `SELECT product_id, name, price_delta, weight_grams FROM product_variants
-        WHERE product_id IN (${idPlaceholders})`,
-      ids
-    );
-    const variantsByProduct = new Map<number, Map<string, VariantRow>>();
-    for (const v of variantRows) {
-      if (!variantsByProduct.has(v.product_id)) {
-        variantsByProduct.set(v.product_id, new Map());
-      }
-      variantsByProduct.get(v.product_id)!.set(v.name, v);
+    // Nama, harga & berat dari DB (jangan percaya harga dari client).
+    const resolved = await resolveCheckoutItems(parsedItems.items);
+    if (!resolved.ok) {
+      const { code, error, productId, variant } = resolved;
+      return NextResponse.json({ error, code, productId, variant }, { status: 409 });
     }
-
-    const orderItems: CheckoutItem[] = [];
-    for (const it of items) {
-      const p = byId.get(it.productId);
-      if (!p) {
-        return itemError(
-          "PRODUCT_NOT_FOUND",
-          `Produk (id ${it.productId}) tidak ditemukan`,
-          it.productId,
-          it.variant
-        );
-      }
-      // Validasi varian dari client terhadap DB:
-      // - produk tanpa varian: tolak nama varian apa pun;
-      // - produk bervarian: varian WAJIB dipilih dan harus terdaftar — bila tidak,
-      //   klien bisa membayar harga dasar untuk varian yang lebih mahal.
-      const known = variantsByProduct.get(p.id);
-      if (known && !it.variant) {
-        return itemError(
-          "VARIANT_REQUIRED",
-          `Pilih varian untuk produk "${p.name}"`,
-          p.id,
-          null
-        );
-      }
-      const v = it.variant ? known?.get(it.variant) : undefined;
-      if (it.variant && !v) {
-        return itemError(
-          "VARIANT_INVALID",
-          `Varian "${it.variant}" untuk produk "${p.name}" sudah tidak tersedia`,
-          p.id,
-          it.variant
-        );
-      }
-      // Harga & berat dari DB: harga = produk + selisih varian; berat varian
-      // bila > 0, selain itu berat produk (rumus sama dengan lib/pricing.ts).
-      const unitPrice = p.price + (v ? Number(v.price_delta) : 0);
-      if (unitPrice < 0) {
-        throw new Error(`Harga varian negatif untuk produk ${p.id}`);
-      }
-      const vWeight = v ? Number(v.weight_grams) : 0;
-      orderItems.push({
-        productId: p.id,
-        name: p.name,
-        variant: v ? v.name : null,
-        quantity: it.quantity,
-        unit_price: unitPrice,
-        weight_grams: vWeight > 0 ? vWeight : p.weight_grams,
-      });
-    }
+    const orderItems = resolved.items;
     const totalEstimate = orderItems.reduce(
       (sum, it) => sum + it.unit_price * it.quantity,
       0
@@ -286,6 +181,29 @@ export async function POST(req: Request) {
       (sum, it) => sum + it.weight_grams * it.quantity,
       0
     );
+
+    // Estimasi ongkir (Skill 31): dicocokkan dengan cache tarif server.
+    const shipping = await resolveOrderShipping(
+      hasDistrict ? shippingInput : null,
+      totalWeightGrams(orderItems)
+    );
+    // Salah pilih ongkir = koreksi form, bukan pesanan → jatah kuota dikembalikan.
+    if (shipping.kind === "invalid-district" && !city) {
+      await refundRateLimit(orderKey, quota.stamp);
+      return NextResponse.json(
+        { error: "Kecamatan tujuan tidak valid. Pilih ulang kecamatan.", code: "SHIPPING_DISTRICT_INVALID" },
+        { status: 400 }
+      );
+    }
+    if (shipping.kind === "required") {
+      await refundRateLimit(orderKey, quota.stamp);
+      return NextResponse.json(
+        { error: "Pilih kurir pengiriman terlebih dahulu.", code: "SHIPPING_REQUIRED" },
+        { status: 400 }
+      );
+    }
+    const ship = shipping.kind === "ok" ? shipping : null;
+    if (ship) city = ship.districtLabel;
 
     // Generate Order ID unik: nomor urut berikutnya hari ini (WIB), lalu retry
     // bila UNIQUE order_code bentrok dengan request bersamaan.
@@ -324,8 +242,10 @@ export async function POST(req: Request) {
           statement(
             `INSERT INTO orders
                (order_code, recipient_name, phone, fulfillment_method,
-                address, city, location_note, status, total_estimate, note)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'Menunggu Konfirmasi', ?, ?)`,
+                address, city, location_note, status, total_estimate, note,
+                shipping_district_code, shipping_courier, shipping_service,
+                shipping_etd, shipping_estimate, shipping_weight_grams, shipping_quoted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'Menunggu Konfirmasi', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               orderCode,
               recipientName,
@@ -336,6 +256,13 @@ export async function POST(req: Request) {
               locationNote,
               totalEstimate,
               note,
+              ship?.districtCode ?? null,
+              ship?.courierCode ?? null,
+              ship?.snapshot ? `${ship.snapshot.courierName} · ${ship.snapshot.serviceName}` : null,
+              ship?.snapshot?.etd ?? null,
+              ship?.snapshot?.price ?? null,
+              ship?.snapshot?.weightGrams ?? null,
+              ship?.quotedAt ?? null,
             ]
           ),
           // Snapshot nama & harga saat pesan, urut sesuai keranjang.
@@ -380,6 +307,9 @@ export async function POST(req: Request) {
       items: orderItems,
       total_estimate: totalEstimate,
       total_weight: totalWeight,
+      city,
+      shipping: ship?.snapshot ?? null,
+      shippingDropped: ship?.dropped ?? false,
     });
   } catch (err) {
     await refundRateLimit(orderKey, quota.stamp);

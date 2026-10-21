@@ -14,6 +14,26 @@ export type CheckoutItem = {
   weight_grams: number;
 };
 
+/** Satu baris estimasi ongkir (Skill 31) — dinormalisasi server, harga sudah dibulatkan ke atas Rp 1.000. */
+export type ShippingRate = {
+  courierCode: string;
+  courierName: string;
+  serviceCode: string;
+  serviceName: string;
+  /** Estimasi hari, mis. "2-4"; null bila kurir tidak memberi. */
+  etd: string | null;
+  price: number;
+};
+
+/** Pilihan ongkir yang tersimpan di pesanan (versi server). */
+export type ShippingSnapshot = {
+  courierName: string;
+  serviceName: string;
+  etd: string | null;
+  price: number;
+  weightGrams: number;
+};
+
 export type CustomerInfo = {
   fulfillment_method: FulfillmentMethod;
   recipient_name: string;
@@ -28,6 +48,8 @@ export type OrderConfirmation = CustomerInfo & {
   order_code: string;
   items: CheckoutItem[];
   total_estimate: number;
+  /** Estimasi ongkir pilihan pelanggan (Skill 31); null = dikonfirmasi via WhatsApp. */
+  shipping?: ShippingSnapshot | null;
 };
 
 /**
@@ -71,9 +93,23 @@ export function formatOrderMessage(order: OrderConfirmation): string {
 
   lines.push("");
   lines.push(`Total berat pesanan: ${formatWeight(totalWeight)}`);
-  lines.push(
-    `Subtotal: ${formatRupiah(order.total_estimate)} (belum termasuk ongkir)`
-  );
+  if (order.fulfillment_method !== "kurir") {
+    lines.push(`Subtotal: ${formatRupiah(order.total_estimate)}`);
+  } else if (order.shipping) {
+    // Estimasi dari situs (Skill 31) — bukan tagihan final.
+    const s = order.shipping;
+    lines.push(`Subtotal: ${formatRupiah(order.total_estimate)}`);
+    lines.push(
+      `Pengiriman pilihan: ${s.courierName} · ${s.serviceName}${s.etd ? ` (estimasi ${s.etd} hari)` : ""}`
+    );
+    lines.push(`Estimasi ongkir: ${formatRupiah(s.price)} (perkiraan, mohon dikonfirmasi)`);
+    lines.push(`Estimasi total: ${formatRupiah(order.total_estimate + s.price)}`);
+  } else {
+    lines.push(
+      `Subtotal: ${formatRupiah(order.total_estimate)} (belum termasuk ongkir)`
+    );
+    lines.push("Ongkir: dikonfirmasi via WhatsApp");
+  }
 
   return lines.join("\n");
 }

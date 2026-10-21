@@ -12,11 +12,13 @@
  * - Token & secret tidak pernah dicatat di log.
  */
 
+import type { CaptchaAction } from "@/lib/captcha-errors";
+
 const VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const TIMEOUT_MS = 8000;
 const MAX_TOKEN_LENGTH = 2048;
 
-export type CaptchaAction = "login" | "check-order" | "checkout" | "account";
+export type { CaptchaAction };
 export type CaptchaErrorCode = "CAPTCHA_REQUIRED" | "CAPTCHA_FAILED" | "CAPTCHA_UNAVAILABLE";
 export type CaptchaResult =
   | { ok: true }

@@ -62,7 +62,7 @@
     "remove": "Remove item",
     "increase": "Increase quantity",
     "decrease": "Decrease quantity",
-    "shippingNote": "Shipping not included — calculated by the owner via WhatsApp (except self pickup)."
+    "shippingNote": "Final shipping cost is confirmed via WhatsApp; a shipping estimate is available at checkout (except self pickup)."
   },
   "checkout": {
     "title": "Checkout",
@@ -92,7 +92,31 @@
     "errProductGone": "{product} is no longer available. Remove it from your cart to continue.",
     "removeItem": "Remove from cart",
     "chooseVariant": "Choose option",
-    "pricesUpdated": "Prices have been updated to the latest. Applicable total: {total} (already used in the WhatsApp message)."
+    "pricesUpdated": "Prices have been updated to the latest. Applicable total: {total} (already used in the WhatsApp message).",
+    "pickupNoShipping": "Self pickup — no shipping cost.",
+    "shipping": {
+      "province": "Province",
+      "city": "City / Regency",
+      "district": "District",
+      "choose": "Choose...",
+      "loading": "Loading...",
+      "title": "Choose shipping",
+      "check": "Check shipping cost",
+      "checking": "Calculating shipping...",
+      "etd": "Estimated {days} days",
+      "estimate": "Estimated shipping",
+      "estimatedTotal": "Estimated total",
+      "disclaimer": "Shipping cost is an estimate — the final total is confirmed by the owner via WhatsApp.",
+      "unavailable": "Shipping estimates are unavailable right now. Continue your order — shipping will be confirmed via WhatsApp.",
+      "weightUnknown": "Some product weights are missing, so shipping can't be estimated. Continue your order — shipping will be confirmed via WhatsApp.",
+      "tooHeavy": "This order exceeds 30 kg. Continue your order — shipping will be confirmed via WhatsApp.",
+      "notServed": "No courier serves this destination yet. Continue your order — shipping will be confirmed via WhatsApp.",
+      "rateLimited": "Too many shipping checks from this network. Try again later, or continue your order — shipping will be confirmed via WhatsApp.",
+      "chooseDistrict": "Choose the destination district first.",
+      "errChoose": "Choose a shipping courier.",
+      "errDistrict": "The destination district is invalid. Please choose it again.",
+      "dropped": "Your shipping choice couldn't be confirmed (rates were updated). The owner will confirm shipping via WhatsApp."
+    }
   },
   "whatsapp": {
     "askStock": "Hello, I'd like to ask about stock availability for:"

@@ -62,7 +62,7 @@
     "remove": "Hapus item",
     "increase": "Tambah jumlah",
     "decrease": "Kurangi jumlah",
-    "shippingNote": "Ongkir belum termasuk — dihitung pemilik via WhatsApp (kecuali ambil sendiri)."
+    "shippingNote": "Ongkir final dikonfirmasi via WhatsApp; estimasi ongkir tersedia di checkout (kecuali ambil sendiri)."
   },
   "checkout": {
     "title": "Checkout",
@@ -92,7 +92,31 @@
     "errProductGone": "{product} sudah tidak tersedia. Hapus dari keranjang untuk melanjutkan.",
     "removeItem": "Hapus dari keranjang",
     "chooseVariant": "Pilih varian",
-    "pricesUpdated": "Harga sudah diperbarui sesuai harga terbaru. Total yang berlaku: {total} (sudah dipakai di pesan WhatsApp)."
+    "pricesUpdated": "Harga sudah diperbarui sesuai harga terbaru. Total yang berlaku: {total} (sudah dipakai di pesan WhatsApp).",
+    "pickupNoShipping": "Ambil sendiri — tanpa ongkir.",
+    "shipping": {
+      "province": "Provinsi",
+      "city": "Kota / Kabupaten",
+      "district": "Kecamatan",
+      "choose": "Pilih...",
+      "loading": "Memuat...",
+      "title": "Pilih pengiriman",
+      "check": "Lihat ongkir",
+      "checking": "Menghitung ongkir...",
+      "etd": "Estimasi {days} hari",
+      "estimate": "Estimasi ongkir",
+      "estimatedTotal": "Estimasi total",
+      "disclaimer": "Ongkir adalah perkiraan — total final dikonfirmasi pemilik via WhatsApp.",
+      "unavailable": "Estimasi ongkir sedang tidak tersedia. Lanjutkan pesanan — ongkir akan dikonfirmasi via WhatsApp.",
+      "weightUnknown": "Berat sebagian produk belum tersedia, jadi ongkir tidak bisa diperkirakan. Lanjutkan pesanan — ongkir dikonfirmasi via WhatsApp.",
+      "tooHeavy": "Pesanan melebihi 30 kg. Lanjutkan pesanan — ongkir dikonfirmasi via WhatsApp.",
+      "notServed": "Belum ada kurir yang melayani tujuan ini. Lanjutkan pesanan — ongkir dikonfirmasi via WhatsApp.",
+      "rateLimited": "Terlalu banyak cek ongkir dari jaringan ini. Coba lagi nanti, atau lanjutkan pesanan — ongkir dikonfirmasi via WhatsApp.",
+      "chooseDistrict": "Pilih kecamatan tujuan terlebih dahulu.",
+      "errChoose": "Pilih salah satu kurir pengiriman.",
+      "errDistrict": "Kecamatan tujuan tidak valid. Pilih ulang kecamatan.",
+      "dropped": "Pilihan ongkir tidak bisa dipastikan (data ongkir sudah diperbarui). Ongkir akan dikonfirmasi pemilik via WhatsApp."
+    }
   },
   "whatsapp": {
     "askStock": "Halo, saya ingin menanyakan ketersediaan stok untuk produk:"

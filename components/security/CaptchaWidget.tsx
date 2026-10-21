@@ -2,6 +2,7 @@
 
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { useI18n } from "@/components/i18n/I18nProvider";
+import type { CaptchaAction } from "@/lib/captcha-errors";
 import styles from "./CaptchaWidget.module.css";
 
 /**
@@ -52,7 +53,7 @@ export default function CaptchaWidget({
   ref,
 }: {
   siteKey: string;
-  action: "login" | "check-order" | "checkout" | "account";
+  action: CaptchaAction;
   /** Dipanggil dengan token baru, atau "" saat kedaluwarsa/error/reset. */
   onToken: (token: string) => void;
   ref?: Ref<CaptchaHandle>;
