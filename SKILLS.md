@@ -1,5 +1,5 @@
 # SKILLS.md — Rasa Medan
-## Modul Kerja untuk Claude Code (Skill 1–30)
+## Modul Kerja untuk Claude Code (Skill 1–31)
 
 Satu-satunya daftar skill proyek ini. Per 12 Oktober 2026 file ini menggabungkan `SKILLS.md` lama (Skill 1–12) dan `SKILLS-ADDENDUM.md` (Skill 13–19), lalu menambahkan gerbang review (Skill 20–21) dan pelacakan pengiriman (Skill 22). Per 13 Oktober 2026 ditambahkan BAGIAN E: migrasi infrastruktur dari cPanel ke Cloudflare Workers (Skill 23–30).
 
@@ -48,6 +48,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 25 | Migrasi data & seed | ✅ Kode selesai (14 Okt 2026): `db:export` (MySQL → SQL D1), `db:import` (precheck + verifikasi), `db/seed/dummy-products.sql`; teruji dengan MariaDB sungguhan (zona waktu +07:00). ⏳ Ekspor/impor production dijalankan saat cutover (Skill 30). Rincian 25a |
 | 29 | Environment, config & build CI | 🟡 Dokumen & kode selesai (14 Okt 2026), AC belum tuntas sampai pemilik merotasi `ADMIN_SESSION_SECRET` (21.2 no. 1): `DEPLOYMENT.md` Cloudflare (versi cPanel diarsip), `.env.example` baru, checklist 21.3 Cloudflare, deploy guard + peringatan WA dummy. ⏳ Pemilik: rotasi secret via `wrangler secret put`, deploy uji workers.dev, (opsional) Workers Builds. Rincian 29a |
 | 30 | Cutover & pensiun cPanel (BAGIAN E) | 🟡 Runbook lengkap di `DEPLOYMENT.md` §11 (14 Okt 2026): persiapan DNS/email, gladi data, latihan domain, hari H berurutan, rollback, penguncian H+2, arsip H+30. ⏳ Eksekusi oleh pemilik (butuh akun Cloudflare & cPanel) |
+| 31 | Estimasi ongkir mandiri di checkout (api.co.id) | ⏳ Rancangan disetujui pemilik (21 Okt 2026); menunggu gerbang 31.0 (uji endpoint oleh pemilik) |
 
 ---
 
@@ -1012,4 +1013,90 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 
 ---
 
-*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 31, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*
+# BAGIAN F — Fitur Lanjutan
+
+## Skill 31 — Estimasi Ongkir Mandiri di Checkout (api.co.id)
+
+**Tujuan:** Pelanggan kurir melihat ESTIMASI ongkir per kurir/layanan saat checkout dan memilih satu; harganya masuk estimasi total. Konfirmasi final & pembayaran tetap via WhatsApp (CLAUDE.md §6 butir 3 dan PRD §3.11, diperbarui 21 Okt 2026). Pemesanan kurir & tracking api.co.id TIDAK termasuk (Skill 22 Jalur B). Rancangan: agent `architect`, 21 Okt 2026.
+
+**Batas lingkup:** status PRD §2.1 tidak berubah; tidak ada pemesanan kurir/pembayaran otomatis; `total_estimate` tetap = item saja (ongkir di kolom terpisah); checkout TIDAK boleh gagal karena ongkir.
+
+### 31a — Keputusan pemilik (21 Okt 2026)
+| Topik | Keputusan |
+|---|---|
+| Teks PRD/CLAUDE.md | Disetujui dan diterapkan (PRD §1.4, §2 langkah 3 & 8, §3.5, §3.10, §3.11, §5.2, §8; CLAUDE.md §2 & §6.3) |
+| Kurir | **Semua** kurir/layanan dari api.co.id (tanpa allowlist), kecuali COD |
+| Pengiriman | Paket **diantar ke agen** (drop-off) → `sender_type` nilai drop-off (nilai persis dari 31.0) |
+| Harga tampil | **Dibulatkan ke atas ke Rp 1.000** (field harga dasar ditentukan di 31.0) |
+| Berat | Σ berat produk/varian × qty, **tanpa tambahan kemasan**; bucket ceil 100 g; maks 30 kg |
+| Batas biaya | **100 cek tarif/hari** total (`shipquote:all`), **5 cek/jam per IP** (`shipquote:<ip>`) |
+| Pilihan kurir | **Wajib** dipilih pelanggan bila estimasi tersedia; harga masuk ringkasan & estimasi total. Tanpa opsi "admin pilihkan"; bila estimasi tidak tersedia → fallback "Ongkir dikonfirmasi via WhatsApp" |
+| Asal toko | Konfigurasi deploy `SHIPPING_ORIGIN_DISTRICT_CODE` (bukan admin) |
+| Pesanan lama | Tetap tanpa estimasi (kolom baru nullable) |
+| Cek Pesanan | Estimasi ongkir tidak ditampilkan (di luar cakupan) |
+
+### 31.0 Verifikasi sebelum coding — GERBANG (pemilik)
+Docs (dibaca 21 Okt 2026): rates `GET /courier/v2/rates` Rp 5/panggilan sukses (param `origin_district_code`, `destination_district_code`, `weight` gram, opsional `sender_type`, `item_value`, `insurance`, dimensi); lokasi `GET /courier/v1/locations/{provinces | cities?province= | districts?city=}` gratis, hanya bertingkat (tanpa pencarian teks); sandbox = tarif mock & gratis; error 401/402 (saldo)/422/429 (kuota plan)/5xx.
+1. Live Key + Test Key. Panggil provinces → cities (Sumatera Utara) → districts (Kota Medan); catat kode kecamatan toko, ada/tidaknya `paging`, format/panjang kode.
+2. Rates LIVE ≥3 rute (Medan→Medan, Medan→Jakarta, Medan→Indonesia Timur) × berat 500/1000/2500 g, dengan `sender_type` drop-off (uji nilai persis, mis. `dropped`) dan tanpa.
+3. Bandingkan `price` / `total_price` / `normal_price` dengan harga loket nyata 2 kurir → tentukan field dasar sebelum pembulatan Rp 1.000.
+4. Uji error: kode tujuan salah, weight=0, key salah; catat status + message.
+5. `GET /courier/v1/couriers` → daftar kode kurir (pemetaan `lib/couriers.mjs` field `apiCode`).
+6. Catat: apakah endpoint gratis memakan kuota bulanan plan (429), kuota plan, batas per detik, latensi rata-rata, izin menampilkan tarif ke pelanggan.
+7. Simpan respons asli tersanitasi: `docs/api-co-id-locations-sample.json`, `docs/api-co-id-rates-sample.json`.
+- [ ] Hasil 1–7 tercatat di 31b. **Normalizer (31.3) hanya boleh ditulis dari sampel ini.** Bila harga API jauh dari harga loket → hentikan skill.
+
+### 31.1 Dokumen
+- [x] PRD & CLAUDE.md diperbarui (21 Okt 2026, lihat 31a).
+- [ ] DEPLOYMENT.md & README (peta env) — bersama 31.8.
+
+### 31.2 Data
+`migrations/0004_shipping_estimate.sql`:
+- tabel `shipping_cache (cache_key TEXT PK, payload TEXT, fetched_at TEXT, expires_at TEXT)` + index `expires_at` — payload TERNORMALISASI; kunci `loc:province`, `loc:city:<prov>`, `loc:district:<city>`, `rate:<origin>:<dest>:<bucket>:<sender_type>`, `circuit:rates`;
+- kolom `orders` nullable: `shipping_district_code`, `shipping_courier`, `shipping_service`, `shipping_etd`, `shipping_estimate INTEGER ≥0`, `shipping_weight_grams INTEGER ≥0`, `shipping_quoted_at`. (Uji lokal apakah D1 menerima `ADD COLUMN … CHECK`; bila tidak, validasi di aplikasi.)
+- `courier_code`/`waybill` (Skill 22) tetap = kurir AKTUAL yang diisi admin.
+- Batas atas berat produk ≤ 50.000 g di `lib/product-admin.ts`; pemilik memperbaiki produk/varian berberat 0.
+- Terapkan `db:migrate:staging` lalu `db:migrate:remote` **sebelum** deploy kode.
+
+### 31.3 Klien api.co.id & normalizer (server-only)
+- `lib/api-co-id.ts`: `API_CO_ID_KEY` dibaca di dalam fungsi, `AbortSignal.timeout(6000)`, peta error → `auth|balance|quota|invalid|upstream|timeout`, log hanya status + message ≤120 karakter (tanpa key/body/IP).
+- `lib/shipping.ts`: config `SHIPPING_*`, kunci & get/put cache D1, circuit breaker 60 mnt untuk 401/402/429, normalizer lokasi & tarif (dari sampel 31.0; field hilang → baris dibuang), validasi keanggotaan kode wilayah terhadap cache, bucket berat, **pembulatan harga ke atas Rp 1.000**, filter COD, urut harga.
+- `lib/checkout-items.ts`: ekstrak validasi item+harga+berat dari `app/api/orders/route.ts` (dipakai orders & rates; perilaku orders tidak berubah).
+
+### 31.4 `GET /api/shipping/locations?level=province|city|district&parent=`
+Fitur mati (key/origin kosong) → `{available:false}`. `parent` wajib anggota cache level di atasnya (tanpa spam kode acak). Cache 30 hari, `Cache-Control: public, max-age=86400`. Rate limit `shiploc:<ip>` 60/10 mnt hanya saat miss. Gagal → `{available:false}` (UI kembali ke input teks lama).
+
+### 31.5 `POST /api/shipping/rates`
+Body `{ cityCode, districtCode, items:[{productId,variant,quantity}], captchaToken }`. Urutan: Content-Type JSON → `shiprates:<ip>` 30/10 mnt → validasi (≤50 baris, qty 1–99, kecamatan anggota cache) → berat dari DB (ada berat 0 → `WEIGHT_UNKNOWN`; >30 kg → `TOO_HEAVY`) → cache tarif (**hit: tanpa captcha & biaya**) → miss: circuit → Turnstile action `shipping-rates` → `shipquote:<ip>` **5/jam** → `shipquote:all` **100/24 jam** (`SHIPPING_RATES_DAILY_CAP`) → upstream. Non-2xx → refund kuota; 401/402/429 → buka circuit + `console.error`; respons `{available:false, reason}` HTTP 200. Cache tarif 12 jam (negatif 1 jam); sweep baris kedaluwarsa (2% request, ≤200 baris).
+
+### 31.6 UI checkout
+`components/checkout/ShippingSection.tsx`: select bertingkat Provinsi → Kota/Kab → Kecamatan (native, lazy), tombol "Lihat ongkir" (eksplisit), daftar radio kurir · layanan · harga · estimasi hari (target sentuh ≥44 px). **Bila tarif tersedia, submit dinonaktifkan sampai satu kurir dipilih.** Ringkasan: subtotal, perkiraan berat, ongkir terpilih, **estimasi total**, disclaimer "perkiraan — ongkir final dikonfirmasi via WhatsApp". Ganti kecamatan/keranjang → tarif & pilihan direset. Fallback (fitur mati/lokasi gagal/`available:false`) → input teks lama + pesan sesuai `reason`, checkout lanjut. `CaptchaWidget` action baru (opsi `interaction-only`). i18n `checkout.shipping.*` id/en; `cart.shippingNote` diperbarui. Dites 375 px.
+
+### 31.7 Order, WhatsApp, admin
+`POST /api/orders` menerima `shipping {cityCode, districtCode, courierCode, serviceCode} | null` (hanya kurir). Server: kecamatan divalidasi ke cache → `city` dibentuk server; bila tarif tersedia di cache (grace 14 jam) **wajib ada pilihan** yang cocok → snapshot harga/etd/label dari cache server (harga dari body diabaikan). Pilihan tidak ditemukan (cache kedaluwarsa/berat berubah) → snapshot NULL + `shippingDropped:true` (klien memberi tahu, mirip `priceChanged`). Tanpa panggilan upstream saat order. `formatOrderMessage`: baris kurir pilihan, estimasi ongkir, estimasi total ("perkiraan, mohon dikonfirmasi") atau "Ongkir: dikonfirmasi via WhatsApp". Admin pesanan menampilkan snapshot; (opsional) prefill `ShipmentForm` dari `apiCode`.
+
+### 31.8 Env, staging-first & dokumen
+`API_CO_ID_KEY` hanya `wrangler secret` (+ `.env`/`.dev.vars` lokal, `.env.example`/`.dev.vars.example` kosong, `cf:typegen`). `wrangler.jsonc` vars top-level DAN `env.staging`: `SHIPPING_ORIGIN_DISTRICT_CODE`, `SHIPPING_SENDER_TYPE`, `SHIPPING_RATES_DAILY_CAP` (100); guard memvalidasi format. Rilis: migrasi staging → `secret put API_CO_ID_KEY --env staging` (Test Key untuk UI, lalu Live Key) → uji AC → migrasi remote → secret production → merge `main`. `DEPLOYMENT.md` §0, §3, §7 (uji asap ongkir + fallback), §8 (WAF `/api/shipping/*`), §9a, §10 (top-up saldo, rotasi key, kill switch `npx wrangler secret delete API_CO_ID_KEY`).
+
+### 31.9 Review
+`code-reviewer` + `security-auditor` (fokus: key tidak di bundle, harga tidak dari klien, amplifikasi biaya, validasi kode wilayah, log PII).
+
+**Acceptance Criteria:**
+- [ ] 31.0 tercatat dan sampel JSON asli ada sebelum normalizer ditulis
+- [ ] Pelanggan kurir memilih kecamatan, melihat ≥1 tarif (harga kelipatan Rp 1.000) di staging (Live Key), dan tidak bisa submit tanpa memilih kurir saat tarif tersedia; pickup tanpa ongkir
+- [ ] Cek kedua untuk rute + bucket berat sama dalam 12 jam tidak memanggil upstream
+- [ ] Miss tanpa token Turnstile → 400 `CAPTCHA_REQUIRED`; cek ke-6 per jam per IP / ke-101 per hari → fallback/429 tanpa memanggil upstream
+- [ ] Key kosong / origin kosong / upstream 402 / timeout → checkout sukses, WA berisi "Ongkir: dikonfirmasi via WhatsApp"
+- [ ] `POST /api/orders` dengan harga palsu di body diabaikan; kurir/layanan tak ada di cache → snapshot NULL + `shippingDropped`
+- [ ] Kode wilayah bukan anggota cache ditolak tanpa memanggil upstream
+- [ ] WA & admin pesanan menampilkan kurir, layanan, etd, estimasi ongkir, estimasi total; pesanan lama tampil normal
+- [ ] `grep -r API_CO_ID .open-next/assets .next/static` kosong; bundle ≤3 MiB (`npm run cf:dryrun`)
+- [ ] Teks UI publik baru di `locales/id.json` & `en.json`; tampilan 375 px dicek
+- [ ] Status PRD §2.1 tidak berubah
+
+### 31b — Hasil gerbang 31.0
+*(diisi setelah uji pemilik)*
+
+---
+
+*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 32, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*

@@ -29,7 +29,7 @@ Usaha kecil (UMKM) penjual makanan ringan khas Medan (kue, makanan kering, sirup
 Untuk menjaga MVP tetap ringkas dan cepat dibangun, fitur berikut **tidak** termasuk di versi awal (dipertimbangkan untuk fase berikutnya):
 - Payment gateway otomatis (Midtrans/Xendit, dsb.)
 - Akun/login pelanggan
-- Kalkulasi ongkir otomatis via API (RajaOngkir, dll.)
+- Penagihan ongkir otomatis & pemesanan kurir via API (estimasi ongkir tersedia sejak Skill 31 — lihat §3.11)
 - Ulasan & rating produk
 - Kupon/diskon otomatis
 - Multi-admin/role management
@@ -44,12 +44,12 @@ Untuk menjaga MVP tetap ringkas dan cepat dibangun, fitur berikut **tidak** term
 ```
 1. Pelanggan browsing katalog (tanpa login)
 2. Pelanggan menambahkan produk ke keranjang (disimpan di browser/local storage)
-3. Pelanggan checkout → isi data pengiriman (atau pilih ambil sendiri/pickup)
+3. Pelanggan checkout → isi data pengiriman, pilih kecamatan tujuan, lalu pilih kurir dari daftar estimasi ongkir (atau pilih ambil sendiri/pickup)
 4. Sistem generate Order ID unik + rangkuman pesanan
 5. Sistem membuka WhatsApp (wa.me) dengan pesan otomatis terisi (daftar barang, jumlah, data pengiriman)
 6. Pelanggan kirim pesan WhatsApp ke pemilik
 7. Pemilik memeriksa stok aktual
-8. Pemilik menghitung total + biaya ongkir (jika kurir) via WhatsApp
+8. Pemilik mengonfirmasi total + ongkir final (jika kurir) via WhatsApp — estimasi ongkir dari situs hanya acuan
 9. Pemilik mengirim QR/rekening pembayaran
 10. Pelanggan membayar (QR statis atau transfer bank)
 11. Pemilik memverifikasi pembayaran secara manual
@@ -115,7 +115,7 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 - Pilih metode pengambilan:
   - **Dikirim kurir** → form: nama lengkap penerima, alamat lengkap, kota/kecamatan, catatan lokasi, nomor HP.
   - **Ambil sendiri (pickup)** → form lebih sederhana: nama, nomor HP, estimasi waktu ambil (opsional).
-- Ringkasan pesanan (tanpa total ongkir, karena ongkir dihitung manual oleh pemilik via WhatsApp — kecuali pickup, tidak ada ongkir).
+- Ringkasan pesanan: subtotal; untuk kurir juga estimasi ongkir kurir pilihan pelanggan + estimasi total, berlabel "perkiraan — dikonfirmasi via WhatsApp" (§3.11). Pickup tanpa ongkir.
 - Setelah submit:
   - Sistem generate **Order ID unik** (contoh: `ORD-20260706-0001`).
   - Sistem simpan pesanan dengan status awal `Menunggu Konfirmasi`.
@@ -146,8 +146,20 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 ### 3.10 Lacak Pengiriman (Skill 22)
 - Untuk pesanan bermetode kurir, admin mengisi **kurir** dan **nomor resi** di dashboard pesanan setelah paket diserahkan ke kurir.
 - Pelanggan melihat nama kurir, nomor resi (bisa disalin), dan tautan ke halaman lacak resmi kurir di halaman **Cek Status Pesanan** — nomor resi hanya tampil bila pencarian menyertakan **Order ID** pesanan tersebut, karena resi membuka lokasi & waktu antar di situs kurir. Pencarian dengan nomor HP saja menampilkan Order ID tersamar (mis. `ORD-20261014-••••`) — Order ID lengkap ada di pesan WhatsApp pembeli.
-- Linimasa perjalanan paket langsung di situs (via api.co.id) menyusul setelah verifikasi API (SKILLS 22.0/22.4).
-- **Di luar cakupan (tetap):** ongkir otomatis, pemesanan kurir otomatis, dan perubahan status otomatis — status pesanan tetap diubah manual oleh admin.
+- Linimasa perjalanan paket via api.co.id **tidak tersedia**: uji 22.0 (21 Okt 2026) menunjukkan api.co.id hanya melacak kiriman yang dipesan lewat API mereka (SKILLS 22a).
+- **Di luar cakupan (tetap):** pemesanan kurir otomatis dan perubahan status otomatis — status pesanan tetap diubah manual oleh admin. Estimasi ongkir: §3.11.
+
+### 3.11 Estimasi Ongkir (Skill 31, keputusan pemilik 21 Okt 2026)
+- **Asal:** kecamatan toko (konfigurasi deploy). Paket diantar sendiri ke agen kurir (drop-off).
+- **Tujuan:** pelanggan memilih Provinsi → Kota/Kab → Kecamatan (data wilayah api.co.id).
+- **Berat:** jumlah berat produk/varian × jumlah di keranjang (tanpa tambahan kemasan), dibulatkan ke atas per 100 g.
+- **Kurir:** semua kurir/layanan yang dikembalikan api.co.id (kecuali COD). Harga ditampilkan **dibulatkan ke atas ke Rp 1.000**.
+- **Pilihan wajib:** bila estimasi tersedia, pelanggan **wajib memilih satu kurir/layanan**; harganya masuk ke **estimasi total** di ringkasan checkout dan pesan WhatsApp.
+- **Fallback:** bila estimasi tidak tersedia (API gagal, saldo habis, batas harian tercapai, berat produk belum diisi), checkout tetap berjalan dan pesan WhatsApp berisi "Ongkir: dikonfirmasi via WhatsApp".
+- **Bukan tagihan final:** ongkir final & pembayaran tetap dikonfirmasi pemilik via WhatsApp; status pesanan §2.1 tidak berubah.
+- Pilihan kurir, layanan, estimasi hari, harga, dan berat disimpan sebagai **snapshot** di pesanan; tampil di pesan WhatsApp dan dashboard admin.
+- **Biaya API** (Rp 5 per cek tarif): cache hasil 12 jam, batas **100 cek/hari** total dan **5 cek/jam per IP**, captcha saat cek baru.
+- **Privasi:** data yang dikirim ke api.co.id hanya kode kecamatan dan berat (tanpa nama/HP/alamat).
 
 ## 4. Desain & Identitas Visual
 
@@ -177,7 +189,7 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 
 ### 5.2 Skema Data Utama (Gambaran Tabel; implementasi aktual: `migrations/0001_init.sql`)
 - `products`: id, nama, kategori, harga, deskripsi, bahan, label_halal, status_stok, foto_url, variasi (json/tabel relasi)
-- `orders`: id, order_code (Order ID unik), nama_penerima, no_hp, metode_pengambilan (kurir/pickup), alamat, catatan_lokasi, status, total_estimasi, created_at
+- `orders`: id, order_code (Order ID unik), nama_penerima, no_hp, metode_pengambilan (kurir/pickup), alamat, catatan_lokasi, status, total_estimasi (item saja), created_at, snapshot estimasi ongkir `shipping_*` (kecamatan, kurir, layanan, etd, harga, berat, waktu kutip — Skill 31)
 - `order_items`: id, order_id, product_id, variasi, jumlah, harga_satuan
 - `admin_users`: id, username, password_hash
 
@@ -219,7 +231,7 @@ Status ini disimpan di sistem dan bisa dilihat pelanggan lewat halaman "Cek Pesa
 
 Fitur yang bisa dipertimbangkan di fase berikutnya:
 - Integrasi payment gateway otomatis.
-- Kalkulasi ongkir otomatis (integrasi API ekspedisi).
+- Pemesanan kurir otomatis via API (prasyarat tracking api.co.id — Skill 22 Jalur B).
 - Galeri multi-foto & video produk.
 - Deskripsi produk dwibahasa penuh.
 - Sistem akun pelanggan (opsional, tetap pertahankan opsi guest checkout).

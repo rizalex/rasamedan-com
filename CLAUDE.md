@@ -25,6 +25,7 @@ Referensi lengkap kebutuhan produk ada di `PRD-Rasa-Medan_Toko-Oleh-Oleh-Medan.m
 | Auth Admin | Session/JWT sederhana, HANYA untuk admin (pelanggan tidak butuh akun) |
 | i18n | next-intl atau solusi ringan setara, default `id`, opsi `en` |
 | Deployment target | **Cloudflare Workers** via `@opennextjs/cloudflare` + flag `nodejs_compat` (paket Free). Production lama tetap berjalan di cPanel sampai cutover Skill 30, tetapi **tidak bisa di-deploy ulang dari `main`** sejak Skill 23 (`server.js` dihapus, tanpa cabang legacy — keputusan pemilik). Hotfix cPanel darurat: dari commit `fb4ea12` |
+| Estimasi ongkir | api.co.id Cek Ongkir v2 (server-only, secret `API_CO_ID_KEY`), cache & batas biaya di D1 (Skill 31) |
 | Upload foto | Cloudflare **R2** (binding `UPLOADS`, sejak Skill 27), disajikan route `app/uploads/[...path]` di URL `/uploads/<nama>`. Lokal memakai R2 tiruan (miniflare), bukan disk |
 
 ### Batasan Deployment Cloudflare Workers (PENTING)
@@ -113,7 +114,7 @@ Ornamen Melayu (motif pucuk rebung/awan larat) boleh digunakan sebagai elemen de
 
 1. Pelanggan **tidak boleh** diwajibkan membuat akun untuk browsing atau checkout.
 2. Tidak ada payment gateway otomatis — pembayaran selalu manual via WhatsApp + QR statis/transfer.
-3. Ongkir **tidak dihitung otomatis** oleh sistem — itu tanggung jawab pemilik via WhatsApp (kecuali metode pickup, tidak ada ongkir).
+3. Ongkir **boleh ditampilkan sebagai estimasi** di checkout (Skill 31, api.co.id — keputusan pemilik 21 Okt 2026), tetapi **bukan tagihan final**: ongkir final & pembayaran tetap dikonfirmasi pemilik via WhatsApp, dan sistem tidak memesan kurir. Harga estimasi selalu diambil server dari hasil API (dibulatkan ke atas ke Rp 1.000), tidak pernah dari klien. Bila estimasi tidak tersedia (API gagal, saldo habis, berat tidak diketahui), checkout tetap berjalan dan ongkir dikonfirmasi via WhatsApp. Metode pickup tidak memakai ongkir.
 4. Setiap pesanan yang dibuat WAJIB mendapat **Order ID unik** (format: `ORD-YYYYMMDD-XXXX`) sebelum diarahkan ke WhatsApp.
 5. Status pesanan mengikuti daftar baku di PRD bagian 2.1 — jangan menambah/mengubah status tanpa update PRD juga.
 6. Nomor WhatsApp yang dipakai selama development adalah **dummy**: `+62 812-0000-0000` — pastikan disimpan di `.env` (`NEXT_PUBLIC_WA_NUMBER`) supaya mudah diganti user saat deployment, JANGAN hardcode di banyak file.
