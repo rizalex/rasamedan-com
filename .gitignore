@@ -56,3 +56,6 @@ Thumbs.db
 /docs/loc-*.json
 /docs/rates-*.json
 /docs/couriers.json
+
+# Dibuat ulang otomatis oleh `next dev` (Next.js 16); panduan agen proyek ada di CLAUDE.md
+/AGENTS.md
