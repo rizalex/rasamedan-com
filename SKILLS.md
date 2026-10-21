@@ -48,7 +48,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 25 | Migrasi data & seed | ✅ Kode selesai (14 Okt 2026): `db:export` (MySQL → SQL D1), `db:import` (precheck + verifikasi), `db/seed/dummy-products.sql`; teruji dengan MariaDB sungguhan (zona waktu +07:00). ⏳ Ekspor/impor production dijalankan saat cutover (Skill 30). Rincian 25a |
 | 29 | Environment, config & build CI | 🟡 Dokumen & kode selesai (14 Okt 2026), AC belum tuntas sampai pemilik merotasi `ADMIN_SESSION_SECRET` (21.2 no. 1): `DEPLOYMENT.md` Cloudflare (versi cPanel diarsip), `.env.example` baru, checklist 21.3 Cloudflare, deploy guard + peringatan WA dummy. ⏳ Pemilik: rotasi secret via `wrangler secret put`, deploy uji workers.dev, (opsional) Workers Builds. Rincian 29a |
 | 30 | Cutover & pensiun cPanel (BAGIAN E) | 🟡 Runbook lengkap di `DEPLOYMENT.md` §11 (14 Okt 2026): persiapan DNS/email, gladi data, latihan domain, hari H berurutan, rollback, penguncian H+2, arsip H+30. ⏳ Eksekusi oleh pemilik (butuh akun Cloudflare & cPanel) |
-| 31 | Estimasi ongkir mandiri di checkout (api.co.id) | 🟡 Gerbang 31.0 lolos (21 Okt 2026, 31b): berat dalam kg, harga `normal_price`. ⏳ Konfirmasi pemilik (struk loket, layanan Cargo, kecamatan toko) → mulai 31.2 |
+| 31 | Estimasi ongkir mandiri di checkout (api.co.id) | 🟡 Gerbang 31.0 lolos (21 Okt 2026, 31b): berat dalam kg, harga `normal_price`. ⏳ Keputusan pemilik lengkap (normal_price, tanpa Cargo, asal Beringin 120733) → siap 31.2 |
 
 ---
 
@@ -1025,13 +1025,13 @@ Migrasi dari cPanel (Passenger + MySQL + disk lokal) ke Cloudflare Workers. **Ke
 | Topik | Keputusan |
 |---|---|
 | Teks PRD/CLAUDE.md | Disetujui dan diterapkan (PRD §1.4, §2 langkah 3 & 8, §3.5, §3.10, §3.11, §5.2, §8; CLAUDE.md §2 & §6.3) |
-| Kurir | **Semua** kurir/layanan dari api.co.id (tanpa allowlist), kecuali COD |
+| Kurir | **Semua** kurir dari api.co.id (tanpa allowlist), hanya layanan **Standard & Nextday** (tanpa Cargo, 31b); `is_cod` diabaikan |
 | Pengiriman | Paket **diantar ke agen** (drop-off) → `sender_type` nilai drop-off (nilai persis dari 31.0) |
-| Harga tampil | **Dibulatkan ke atas ke Rp 1.000** (field harga dasar ditentukan di 31.0) |
+| Harga tampil | **`normal_price`** (tarif loket, 31b) **dibulatkan ke atas ke Rp 1.000** |
 | Berat | Σ berat produk/varian × qty, **tanpa tambahan kemasan**; bucket ceil 100 g, dikirim ke API dalam **kg** 1 desimal (31b); maks 30 kg |
 | Batas biaya | **100 cek tarif/hari** total (`shipquote:all`), **5 cek/jam per IP** (`shipquote:<ip>`) |
 | Pilihan kurir | **Wajib** dipilih pelanggan bila estimasi tersedia; harga masuk ringkasan & estimasi total. Tanpa opsi "admin pilihkan"; bila estimasi tidak tersedia → fallback "Ongkir dikonfirmasi via WhatsApp" |
-| Asal toko | Konfigurasi deploy `SHIPPING_ORIGIN_DISTRICT_CODE` (bukan admin) |
+| Asal toko | Kec. Beringin, Deli Serdang → `SHIPPING_ORIGIN_DISTRICT_CODE=120733` (konfigurasi deploy, bukan admin) |
 | Pesanan lama | Tetap tanpa estimasi (kolom baru nullable) |
 | Cek Pesanan | Estimasi ongkir tidak ditampilkan (di luar cakupan) |
 
@@ -1103,7 +1103,7 @@ Sampel tersanitasi: `docs/api-co-id-rates-sample.json`, `docs/api-co-id-location
 5. **Kurir** (`/couriers`, 11): anteraja, idx, jne, jnt_cargo, jnt, lion, ninja, paxel, sap, spx, sicepat. Yang muncul di tarif uji: idx, jne, jnt, lion, sap, sicepat (Medan 18 layanan, Jakarta 17, Jayapura 8). **`is_cod` bernilai `true`** pada banyak tarif (docs: selalu false) → jangan filter berdasarkan `is_cod`.
 6. **Field per tarif:** `courier_code, courier_name, courier_image, service_code, service_name, service_type (Standard|Nextday|Cargo), etd ("2-4", bisa kosong), est, is_cod, normal_price, is_cheapest, is_fastest, price, handling_fee, insurance_fee`. Ada layanan kargo berminimum berat (mis. JNE `JTR<130`, `JTR>130`, `JTR>200`) yang harganya tidak masuk akal untuk paket kecil.
 7. **Error:** tujuan/asal salah → 422 "Tujuan/Asal tidak dilayani kurir."; berat <0,1 → 422 "must be at least 0.1"; >1000 → 422 "must not be greater than 1000"; tanpa key → "API key required…". Latensi tarif 0,3–3,1 dtk (panggilan pertama paling lambat) → timeout 6 dtk cukup.
-- [x] Gerbang lolos dengan catatan. ⏳ Keputusan pemilik: (a) konfirmasi `normal_price` vs struk loket; (b) layanan Cargo ikut ditampilkan atau hanya Standard + Nextday; (c) nama kecamatan toko yang benar (uji memakai Medan Baru `127117`).
+- [x] Gerbang lolos. **Keputusan pemilik (21 Okt 2026):** (a) harga = **`normal_price`**, dibulatkan ke atas ke Rp 1.000; (b) **tanpa layanan Cargo** — hanya `service_type` Standard & Nextday; (c) asal = **Kec. Beringin, Kab. Deli Serdang (kode pos 20552) → `SHIPPING_ORIGIN_DISTRICT_CODE=120733`** (kota `1207`). Cek: Beringin→Kemayoran 1 kg mengembalikan 8 layanan non-kargo (JNE REG Rp 30.000, J&T EZ Rp 24.000, SiCepat REG Rp 28.000, …).
 - ⚠️ API key Live sempat ditempel di chat saat uji → **rotasi key di dashboard api.co.id** sebelum dipasang sebagai secret.
 
 ---
