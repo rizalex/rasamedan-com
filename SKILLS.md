@@ -39,7 +39,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 19 | SEO & Google indexing | ⚠️ Kode selesai; hero dikompres 9 MB → 188 KB WebP + OG JPEG 145 KB (20.4). JSON-LD kini AggregateOffer untuk harga varian. 19.8 dikerjakan pemilik |
 | 20 | Code review (gerbang kualitas) | ✅ Audit penuh 20.2 (13 Okt 2026): 5 Penting + 9 Minor diperbaiki; 20.3 lolos (tsc, build, lint ESLint baru, tanpa file _tmp); backlog 20.4 selesai kecuali tugas pemilik (ganti foto hero). Tetap berulang per skill |
 | 21 | Security review & hardening | ✅ 21.2 no. 1–10 dikerjakan (13 Okt 2026, rincian di 21.2a); checklist 21.3 versi Cloudflare. ⏳ Pemilik: rotasi `ADMIN_SESSION_SECRET` di cPanel yang masih live + Workers, ganti password admin lama. Tetap berulang per skill (21.1) |
-| 22 | Lacak pengiriman via api.co.id | 🟡 Jalur cadangan selesai (14 Okt 2026): admin isi kurir + resi, pelanggan lihat resi + tautan lacak resmi kurir (22.1–22.3). ⏳ 22.0 (uji API oleh pemilik) → 22.4 linimasa via api.co.id. Rincian 22a |
+| 22 | Lacak pengiriman via api.co.id | 🟡 Jalur cadangan selesai (14 Okt 2026): admin isi kurir + resi, pelanggan lihat resi + tautan lacak resmi kurir (22.1–22.3). 22.0 diuji 21 Okt 2026: resi eksternal → 404 "Order not found" → **Jalur B** (menunggu konfirmasi tertulis sales api.co.id); 22.4 tidak dikerjakan. Rincian 22a |
 | 23 | Setup runtime Cloudflare Workers | ✅ Kode selesai (OpenNext build + preview lokal lolos, bundle 1,4 MiB gzip, secret .env disaring dari bundle). Deploy uji ke workers.dev menunggu pemilik (`wrangler login`, rotasi secret, `NEXT_PUBLIC_SITE_URL`) |
 | 24 | Migrasi database MySQL → D1 | ✅ Kode selesai (14 Okt 2026): `migrations/0001_init.sql`, `lib/db.ts` D1, semua route via `batch()`/`queryIn`, `mysql2` dihapus; E2E 54 skenario (termasuk checkout 50 baris) lolos di `next dev` + preview workerd (D1 lokal). ⏳ Pemilik: `wrangler d1 create rasamedan` + isi `database_id` (deploy diblokir sampai diisi) |
 | 26 | Rewrite auth untuk Workers | ✅ Kode selesai (14 Okt 2026): PBKDF2-SHA256 Web Crypto (30.000 iterasi, terukur ±5 ms) + HMAC `crypto.subtle`, auth async penuh, `seed:admin` PBKDF2; hash scrypt lama ditolak (reset admin). Rincian 26a |
@@ -650,8 +650,8 @@ Halaman produk api.co.id hanya menjelaskan tracking untuk pengiriman yang **dibu
 2. Baca dokumentasi Kurir API: https://docs.api.co.id/kurir-api/getting-started
 3. Uji `GET https://use.api.co.id/courier/v1/orders/track/{resi}` dengan **satu nomor resi asli** dari kiriman Anda sebelumnya (JNE/J&T/SiCepat), atau tanyakan langsung ke sales api.co.id lewat WhatsApp di halaman produk mereka.
 4. Catat hasilnya:
-   - [ ] Resi dari kiriman di luar api.co.id didukung? Ya / Tidak
-   - [ ] Contoh respons JSON asli (tanpa data pribadi) disimpan di `docs/api-co-id-track-sample.json`
+   - [x] Resi dari kiriman di luar api.co.id didukung? **Tidak** (21 Okt 2026, lihat 22a — menunggu konfirmasi sales)
+   - [ ] Contoh respons JSON asli (tanpa data pribadi) disimpan di `docs/api-co-id-track-sample.json` (hanya relevan untuk Jalur A)
    - [ ] Daftar kode kurir dari `GET /courier/v1/couriers`
    - [ ] Biaya tracking (halaman produk menyebut gratis; konfirmasi)
 
@@ -704,7 +704,14 @@ Kolom `tracking_summary` memakai `TEXT` (bukan `JSON`) agar aman di MySQL maupun
 - **22.3 Pelanggan — keputusan privasi (temuan audit):** resi membuka lokasi/waktu antar di situs kurir, sedangkan nomor HP mudah diketahui orang lain. Maka `POST /api/orders/lookup` mengirim detail `shipment` (nama kurir, resi, URL lacak) **hanya bila Order ID diisi dan cocok**. Agar Order ID benar-benar menjadi faktor kedua, pencarian dengan nomor HP saja mengembalikan Order ID **tersamar** (`ORD-20261014-••••`) dan tanpa penanda "resi tersedia"; `CheckOrderView` menampilkan petunjuk "Masukkan Order ID …" untuk pesanan kurir berstatus Dikirim/Selesai (status memang sudah terlihat). Catatan: Order ID adalah faktor kedua yang lemah (nomor urut per hari) — tebakan tetap dibatasi captcha + rate limit; perlindungan lebih kuat kelak: token acak per pesanan di pesan WhatsApp. Tidak ada endpoint publik baru. `CheckOrderView` menampilkan resi + tombol Salin + "Lacak di situs kurir ↗" (`rel="noopener noreferrer"`). Teks lewat `locales/id.json`/`en.json` (`checkOrder.shipment`, `waybillNeedsCode`, dst.).
 - **PRD:** §3.10 Lacak Pengiriman ditambahkan (ongkir, pemesanan kurir, dan status otomatis tetap di luar cakupan).
 - **Teruji** (`next dev`): 401 tanpa sesi; kurir tak dikenal, 5 format resi salah, pesanan pickup, dan pesanan tak ada ditolak; resi disimpan (trim + huruf besar); `shipped_at` terisi dan status tidak berubah; pelanggan melihat resi + tautan; pickup tanpa shipment; nomor HP lain tidak melihat resi; ganti resi mempertahankan `shipped_at`; kurir lain tanpa tautan; hapus resi; tampilan 375px admin & Cek Pesanan dicek di browser.
-- **Sisa (setelah 22.0 oleh pemilik):** 22.4 `lib/tracking.ts` (`import "server-only"`, `API_CO_ID_KEY` via `wrangler secret put`, `encodeURIComponent(waybill)`, timeout 8 dtk, cache 30 menit di `tracking_checked_at`, normalizer dari respons asli), 22.5 env & dokumen, AC `grep -r API_CO_ID .open-next/assets` kosong. Pertimbangan: sembunyikan resi untuk pesanan `Selesai` yang sudah lama.
+- **Hasil 22.0 (21 Okt 2026, pemilik):**
+  - Sandbox: HTTP 200, artinya API key dan header `x-api-co-id` valid.
+  - Production dengan resi asli yang **tidak** dibuat lewat api.co.id: HTTP 404 `{"is_success":false,"message":"Order not found"}`.
+  - Dokumentasi (*Tracking & Saldo*) hanya punya `GET /courier/v1/orders/track/{resi}` di grup `orders`. Endpoint itu tanpa parameter kode kurir, dan contoh resinya berformat internal (`TRK…`). Jadi endpoint ini hanya melacak pesanan yang dibuat lewat API mereka.
+  - Kesimpulan: **Jalur B**. Jalur cadangan (22.1–22.3) menjadi solusi final. 22.4–22.6 tidak dikerjakan, dan `API_CO_ID_KEY` tidak dipasang.
+  - Konfirmasi tertulis dari sales api.co.id masih ditunggu. Bila ternyata ada endpoint lacak resi eksternal, buka lagi Jalur A dengan respons asli sebagai dasar normalizer.
+  - Memesan kurir lewat API (agar tracking berfungsi) mengubah alur bisnis PRD §2, sehingga perlu skill dan pembaruan PRD terpisah lewat `architect`.
+- **Sisa (hanya bila Jalur A dibuka lagi):** 22.4 `lib/tracking.ts` (`import "server-only"`, `API_CO_ID_KEY` via `wrangler secret put`, `encodeURIComponent(waybill)`, timeout 8 dtk, cache 30 menit di `tracking_checked_at`, normalizer dari respons asli), 22.5 env & dokumen, AC `grep -r API_CO_ID .open-next/assets` kosong. Pertimbangan: sembunyikan resi untuk pesanan `Selesai` yang sudah lama.
 
 ### 22.6 Review
 `architect` (sebelum coding) → `code-reviewer` (Skill 20) → `security-auditor` (Skill 21). Fokus keamanan: API key tidak bocor ke klien, resi di-encode di URL, dan tidak ada cara melihat resi milik pelanggan lain.
