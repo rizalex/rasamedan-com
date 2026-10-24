@@ -1153,8 +1153,8 @@ Sampel tersanitasi: `docs/api-co-id-rates-sample.json`, `docs/api-co-id-location
 
 **Kode (selesai):**
 - Beranda: judul absolut "Toko Oleh-oleh Khas Medan, Sumatera Utara | Rasa Medan", meta description ≤160 karakter; **H1 = kata kunci** ("Toko Oleh-oleh Khas Medan · Sumatera Utara", tampil sebagai eyebrow), slogan besar jadi `<p>`.
-- Beranda: paragraf SEO (h2) + FAQ 5 pertanyaan (`<details>`), teks i18n `home.seo*`/`home.faq*`; placeholder alamat/jam diisi dari `data/site-info.json` (`lib/home-faq.ts`).
-- JSON-LD: `Store` diperbaiki — alamat asli (Tanjung Morawa, Deli Serdang 20552, bukan "Medan"), `areaServed`, `hasMap`, `email`, `paymentAccepted`, `logo`; `servesCuisine` (tidak valid untuk Store) dihapus. Baru: `WebSite`, `FAQPage` (isi = FAQ yang tampil, bahasa id).
+- Beranda: teks singkat berkata kunci (h2 + 2 kalimat, `home.seoText`) + tautan ke /tentang. Paragraf lokasi lengkap + FAQ 5 pertanyaan (`<details>`) ada di **/tentang** (keputusan pemilik 24 Okt 2026, pilihan B; paragraf SEO lama digabung ke paragraf Tentang pertama di `data/site-info.json`). Teks i18n `support.location*`/`support.faq*`; placeholder alamat/jam diisi dari `data/site-info.json` (`lib/store-faq.ts`).
+- JSON-LD: `Store` diperbaiki — alamat asli (Tanjung Morawa, Deli Serdang 20552, bukan "Medan"), `areaServed`, `hasMap`, `email`, `paymentAccepted`, `logo`; `servesCuisine` (tidak valid untuk Store) dihapus. Baru: `WebSite` (beranda), `FAQPage` (di /tentang, isi = FAQ yang tampil, bahasa id).
 - Judul/description halaman Katalog, kategori, Tentang, Kontak ("Lokasi Toko Oleh-oleh dekat Bandara Kualanamu") memuat kata kunci lokal.
 
 **Pemilik (paling berpengaruh untuk Local Pack):** `docs/SEO.md` — Google Business Profile (kategori Toko Oleh-oleh, alamat SAMA persis dengan situs, foto asli, produk), ulasan Google, Search Console + kirim sitemap, NAP konsisten di media sosial, backlink lokal, deskripsi produk unik di admin.

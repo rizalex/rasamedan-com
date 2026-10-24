@@ -7,7 +7,6 @@ import { getFeaturedProducts } from "@/lib/products";
 import { getAllCategories } from "@/lib/categories";
 import {
   buildMetadata,
-  faqJsonLd,
   HOME_TITLE,
   localBusinessJsonLd,
   websiteJsonLd,
@@ -34,7 +33,6 @@ export default async function HomePage() {
     <>
       <JsonLd data={localBusinessJsonLd()} />
       <JsonLd data={websiteJsonLd()} />
-      <JsonLd data={faqJsonLd()} />
       <Header />
       <HomeView featured={featured} categories={categories} />
       <Footer />

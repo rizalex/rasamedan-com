@@ -46,19 +46,8 @@
     "featuredTitle": "Featured Products",
     "waGreeting": "Hello, I'd like to ask about Rasa Medan products.",
     "seoTitle": "Authentic Medan Souvenirs, Straight from North Sumatra",
-    "seoP1": "Rasa Medan is a Medan souvenir shop selling authentic North Sumatran cakes, dry snacks, and syrups — from Bika Ambon, Kue Gulung, and Kacang Sihobuk to Passion Fruit Syrup. Order online without creating an account, then confirm directly via WhatsApp.",
-    "seoP2": "Our store is in {locality}, on the way to {landmark} — perfect for picking up Medan souvenirs before your flight. Need delivery? We ship to cities across Indonesia with your chosen courier, or you can pick up at the store with no shipping cost.",
-    "faqTitle": "Medan Souvenir FAQ",
-    "faq1Q": "Where is the Rasa Medan souvenir shop?",
-    "faq1A": "Our store is at {address}, near {landmark}. Opening hours: {hours}.",
-    "faq2Q": "How do I order Medan souvenirs from Rasa Medan?",
-    "faq2A": "Pick products from the catalog, add them to your cart, and check out without an account. Your order gets an Order ID and is forwarded to our WhatsApp to confirm stock and payment.",
-    "faq3Q": "Can you ship outside Medan?",
-    "faq3A": "Yes. We ship to cities across Indonesia with your chosen courier. A shipping estimate appears at checkout, and orders ship the day after payment is verified.",
-    "faq4Q": "Can I pick up at the store?",
-    "faq4A": "Yes. Choose Self pickup at checkout — no shipping cost. Pickup is at the store address during opening hours.",
-    "faq5Q": "What payment methods are available?",
-    "faq5A": "Payment is made via WhatsApp using QRIS or bank transfer. Orders are processed once we receive your payment proof."
+    "seoText": "Rasa Medan is a Medan souvenir shop selling Bika Ambon, Kue Gulung, Kacang Sihobuk, and Passion Fruit Syrup. Our store is in {locality}, on the way to {landmark}, and we also ship across Indonesia.",
+    "seoMore": "About Rasa Medan"
   },
   "catalog": {
     "title": "All Products",
@@ -209,7 +198,20 @@
     "emailLabel": "Email",
     "hoursLabel": "Operating Hours",
     "shippingTitle": "Shipping Policy",
-    "waGreeting": "Hello, I'd like to ask about Rasa Medan products."
+    "waGreeting": "Hello, I'd like to ask about Rasa Medan products.",
+    "locationTitle": "Authentic Medan Souvenirs, Straight from North Sumatra",
+    "locationText": "Our store is in {locality}, on the way to {landmark} — perfect for picking up Medan souvenirs before your flight. Need delivery? We ship to cities across Indonesia with your chosen courier, or you can pick up at the store with no shipping cost.",
+    "faqTitle": "Medan Souvenir FAQ",
+    "faq1Q": "Where is the Rasa Medan souvenir shop?",
+    "faq1A": "Our store is at {address}, near {landmark}. Opening hours: {hours}.",
+    "faq2Q": "How do I order Medan souvenirs from Rasa Medan?",
+    "faq2A": "Pick products from the catalog, add them to your cart, and check out without an account. Your order gets an Order ID and is forwarded to our WhatsApp to confirm stock and payment.",
+    "faq3Q": "Can you ship outside Medan?",
+    "faq3A": "Yes. We ship to cities across Indonesia with your chosen courier. A shipping estimate appears at checkout, and orders ship the day after payment is verified.",
+    "faq4Q": "Can I pick up at the store?",
+    "faq4A": "Yes. Choose Self pickup at checkout — no shipping cost. Pickup is at the store address during opening hours.",
+    "faq5Q": "What payment methods are available?",
+    "faq5A": "Payment is made via WhatsApp using QRIS or bank transfer. Orders are processed once we receive your payment proof."
   },
   "orderStatus": {
     "Menunggu Konfirmasi": "Awaiting Confirmation",

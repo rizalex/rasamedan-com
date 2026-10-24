@@ -12,7 +12,7 @@ Bagian A sudah dikerjakan di kode; bagian B–D harus dikerjakan pemilik dan jus
 
 - Judul & meta description per halaman berisi kata kunci (beranda: "Toko Oleh-oleh Khas Medan,
   Sumatera Utara | Rasa Medan"); H1 beranda = kata kunci utama.
-- Teks yang bisa diindeks di beranda (paragraf tentang toko + FAQ 5 pertanyaan).
+- Teks singkat berkata kunci di beranda; paragraf lokasi lengkap + FAQ 5 pertanyaan di halaman Tentang Kami.
 - Structured Data (JSON-LD): `Store` (alamat lengkap Tanjung Morawa 20552, jam buka, telepon,
   area layanan, peta), `WebSite`, `FAQPage`, `Product` (harga & stok), `BreadcrumbList`.
 - `sitemap.xml` (beranda, katalog, kategori, semua produk) & `robots.txt`; halaman transaksi noindex.

@@ -46,19 +46,8 @@
     "featuredTitle": "Produk Pilihan",
     "waGreeting": "Halo, saya ingin bertanya tentang produk Rasa Medan.",
     "seoTitle": "Oleh-oleh Khas Medan, Langsung dari Sumatera Utara",
-    "seoP1": "Rasa Medan adalah toko oleh-oleh khas Medan yang menjual kue, makanan kering, dan sirup asli Sumatera Utara — mulai dari Bika Ambon, Kue Gulung, dan Kacang Sihobuk hingga Sirup Markisa. Semua produk bisa dipesan online tanpa membuat akun, lalu dikonfirmasi langsung lewat WhatsApp.",
-    "seoP2": "Toko kami berada di {locality}, searah dengan {landmark} — pas untuk membeli oleh-oleh Medan sebelum terbang. Ingin dikirim? Pesanan dikirim ke berbagai kota di Indonesia lewat kurir pilihan Anda, atau bisa diambil sendiri di toko tanpa ongkos kirim.",
-    "faqTitle": "Pertanyaan Seputar Oleh-oleh Medan",
-    "faq1Q": "Di mana lokasi toko oleh-oleh Rasa Medan?",
-    "faq1A": "Toko kami berada di {address}, dekat {landmark}. Jam buka: {hours}.",
-    "faq2Q": "Bagaimana cara memesan oleh-oleh khas Medan di Rasa Medan?",
-    "faq2A": "Pilih produk di katalog, masukkan ke keranjang, lalu checkout tanpa perlu membuat akun. Pesanan Anda mendapat Order ID dan diteruskan ke WhatsApp kami untuk konfirmasi stok dan pembayaran.",
-    "faq3Q": "Apakah oleh-oleh bisa dikirim ke luar Medan?",
-    "faq3A": "Bisa. Kami mengirim ke berbagai kota di Indonesia lewat kurir pilihan Anda. Estimasi ongkir tampil saat checkout, dan pesanan dikirim H+1 setelah pembayaran diverifikasi.",
-    "faq4Q": "Apakah bisa ambil sendiri di toko?",
-    "faq4A": "Bisa. Pilih metode Ambil sendiri saat checkout — tanpa ongkos kirim. Pengambilan dilakukan di alamat toko pada jam operasional.",
-    "faq5Q": "Metode pembayaran apa saja yang tersedia?",
-    "faq5A": "Pembayaran dilakukan via WhatsApp dengan QRIS atau transfer bank. Pesanan diproses setelah bukti pembayaran kami terima."
+    "seoText": "Rasa Medan adalah toko oleh-oleh khas Medan yang menjual Bika Ambon, Kue Gulung, Kacang Sihobuk, hingga Sirup Markisa. Toko kami berada di {locality}, searah dengan {landmark}, dan pesanan juga dikirim ke seluruh Indonesia.",
+    "seoMore": "Tentang Rasa Medan"
   },
   "catalog": {
     "title": "Semua Produk",
@@ -209,7 +198,20 @@
     "emailLabel": "Email",
     "hoursLabel": "Jam Operasional",
     "shippingTitle": "Kebijakan Pengiriman",
-    "waGreeting": "Halo, saya ingin bertanya tentang produk Rasa Medan."
+    "waGreeting": "Halo, saya ingin bertanya tentang produk Rasa Medan.",
+    "locationTitle": "Oleh-oleh Khas Medan, Langsung dari Sumatera Utara",
+    "locationText": "Toko kami berada di {locality}, searah dengan {landmark} — pas untuk membeli oleh-oleh Medan sebelum terbang. Ingin dikirim? Pesanan dikirim ke berbagai kota di Indonesia lewat kurir pilihan Anda, atau bisa diambil sendiri di toko tanpa ongkos kirim.",
+    "faqTitle": "Pertanyaan Seputar Oleh-oleh Medan",
+    "faq1Q": "Di mana lokasi toko oleh-oleh Rasa Medan?",
+    "faq1A": "Toko kami berada di {address}, dekat {landmark}. Jam buka: {hours}.",
+    "faq2Q": "Bagaimana cara memesan oleh-oleh khas Medan di Rasa Medan?",
+    "faq2A": "Pilih produk di katalog, masukkan ke keranjang, lalu checkout tanpa perlu membuat akun. Pesanan Anda mendapat Order ID dan diteruskan ke WhatsApp kami untuk konfirmasi stok dan pembayaran.",
+    "faq3Q": "Apakah oleh-oleh bisa dikirim ke luar Medan?",
+    "faq3A": "Bisa. Kami mengirim ke berbagai kota di Indonesia lewat kurir pilihan Anda. Estimasi ongkir tampil saat checkout, dan pesanan dikirim H+1 setelah pembayaran diverifikasi.",
+    "faq4Q": "Apakah bisa ambil sendiri di toko?",
+    "faq4A": "Bisa. Pilih metode Ambil sendiri saat checkout — tanpa ongkos kirim. Pengambilan dilakukan di alamat toko pada jam operasional.",
+    "faq5Q": "Metode pembayaran apa saja yang tersedia?",
+    "faq5A": "Pembayaran dilakukan via WhatsApp dengan QRIS atau transfer bank. Pesanan diproses setelah bukti pembayaran kami terima."
   },
   "orderStatus": {
     "Menunggu Konfirmasi": "Menunggu Konfirmasi",

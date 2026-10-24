@@ -15,7 +15,7 @@ import { getStoreInfo } from "@/lib/store";
 import { getWaNumber } from "@/lib/whatsapp";
 import siteInfo from "@/data/site-info.json";
 import idDict from "@/locales/id.json";
-import { homeFaq } from "@/lib/home-faq";
+import { storeFaq } from "@/lib/store-faq";
 
 // Konstanta merek di lib/site.ts (aman untuk klien); modul ini memuat data
 // locales/site-info untuk JSON-LD, jadi sebaiknya hanya diimpor kode server.
@@ -297,7 +297,7 @@ export function websiteJsonLd(): Record<string, unknown> {
 }
 
 /**
- * FAQPage (JSON-LD) — isi sama dengan FAQ yang tampil di beranda dalam bahasa default
+ * FAQPage (JSON-LD) — isi sama dengan FAQ yang tampil di /tentang dalam bahasa default
  * `id`. Disengaja hanya id: server & crawler selalu merender id (pilihan en dibaca
  * dari localStorage setelah mount, hanya di browser pengguna).
  */
@@ -311,7 +311,7 @@ export function faqJsonLd(): Record<string, unknown> {
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: homeFaq(t).map((f) => ({
+    mainEntity: storeFaq(t).map((f) => ({
       "@type": "Question",
       name: f.q,
       acceptedAnswer: { "@type": "Answer", text: f.a },

@@ -13,7 +13,7 @@ import {
   IconBottle,
 } from "@/components/ui/icons";
 import { buildWaLink } from "@/lib/whatsapp";
-import { homeFaq, homeSeoParagraphs } from "@/lib/home-faq";
+import { fillStoreInfo } from "@/lib/store-faq";
 import type { Product } from "@/lib/products";
 import type { Category } from "@/lib/categories";
 import styles from "./HomeView.module.css";
@@ -122,31 +122,22 @@ export default function HomeView({
           </div>
         </section>
 
-        {/* Konten SEO: teks yang bisa diindeks tentang toko & oleh-oleh Medan */}
+        {/* Teks singkat berkata kunci (Skill 33); versi lengkap + FAQ di /tentang */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>{t("home.seoTitle")}</h2>
           <div className={styles.seoText}>
-            {homeSeoParagraphs(t).map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
+            <p>{fillStoreInfo(t("home.seoText"))}</p>
+            <p>
+              <Link href="/tentang" className={styles.seeAll}>
+                {t("home.seoMore")}
+                <IconArrowUpRight size={14} />
+              </Link>
+            </p>
           </div>
         </section>
 
         {/* Lokasi Toko + peta */}
         <StoreLocation />
-
-        {/* FAQ — isi sama dengan FAQPage JSON-LD di app/page.tsx */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{t("home.faqTitle")}</h2>
-          <div className={styles.faqList}>
-            {homeFaq(t).map((f, i) => (
-              <details key={i} className={styles.faqItem}>
-                <summary>{f.q}</summary>
-                <p>{f.a}</p>
-              </details>
-            ))}
-          </div>
-        </section>
       </main>
     </>
   );
