@@ -1,5 +1,5 @@
 # SKILLS.md — Rasa Medan
-## Modul Kerja untuk Claude Code (Skill 1–32)
+## Modul Kerja untuk Claude Code (Skill 1–33)
 
 Satu-satunya daftar skill proyek ini. Per 12 Oktober 2026 file ini menggabungkan `SKILLS.md` lama (Skill 1–12) dan `SKILLS-ADDENDUM.md` (Skill 13–19), lalu menambahkan gerbang review (Skill 20–21) dan pelacakan pengiriman (Skill 22). Per 13 Oktober 2026 ditambahkan BAGIAN E: migrasi infrastruktur dari cPanel ke Cloudflare Workers (Skill 23–30).
 
@@ -50,6 +50,7 @@ Kerjakan **satu skill per sesi** Claude Code, berurutan:
 | 30 | Cutover & pensiun cPanel (BAGIAN E) | 🟡 Runbook lengkap di `DEPLOYMENT.md` §11 (14 Okt 2026): persiapan DNS/email, gladi data, latihan domain, hari H berurutan, rollback, penguncian H+2, arsip H+30. ⏳ Eksekusi oleh pemilik (butuh akun Cloudflare & cPanel) |
 | 31 | Estimasi ongkir mandiri di checkout (api.co.id) | 🟡 Kode selesai di `dev` (21 Okt 2026, 31c): migrasi 0004, `/api/shipping/{locations,rates}`, pilihan kurir di checkout, snapshot di pesanan/WA/admin; review & audit bersih dari Kritis/Tinggi. ⏳ Uji staging (secret `API_CO_ID_KEY --env staging`, migrasi staging) → production |
 | 32 | Pengaturan kurir agen & resi otomatis | 🟡 Kode selesai di `dev` (21 Okt 2026, 32a). ⏳ Uji staging → production |
+| 33 | SEO lokal "toko oleh-oleh khas Medan" | 🟡 Kode selesai di `dev` (24 Okt 2026). ⏳ Pemilik: Google Business Profile, ulasan, Search Console (`docs/SEO.md` B–D) |
 
 ---
 
@@ -1146,4 +1147,25 @@ Sampel tersanitasi: `docs/api-co-id-rates-sample.json`, `docs/api-co-id-location
 
 ---
 
-*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 33, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*
+## Skill 33 — SEO Lokal "Toko Oleh-oleh Khas Medan"
+
+**Tujuan:** (permintaan pemilik 24 Okt 2026) muncul di atas untuk pencarian "toko oleh-oleh khas Medan, Sumatera Utara". Melengkapi Skill 19 (fondasi SEO teknis).
+
+**Kode (selesai):**
+- Beranda: judul absolut "Toko Oleh-oleh Khas Medan, Sumatera Utara | Rasa Medan", meta description ≤160 karakter; **H1 = kata kunci** ("Toko Oleh-oleh Khas Medan · Sumatera Utara", tampil sebagai eyebrow), slogan besar jadi `<p>`.
+- Beranda: paragraf SEO (h2) + FAQ 5 pertanyaan (`<details>`), teks i18n `home.seo*`/`home.faq*`; placeholder alamat/jam diisi dari `data/site-info.json` (`lib/home-faq.ts`).
+- JSON-LD: `Store` diperbaiki — alamat asli (Tanjung Morawa, Deli Serdang 20552, bukan "Medan"), `areaServed`, `hasMap`, `email`, `paymentAccepted`, `logo`; `servesCuisine` (tidak valid untuk Store) dihapus. Baru: `WebSite`, `FAQPage` (isi = FAQ yang tampil, bahasa id).
+- Judul/description halaman Katalog, kategori, Tentang, Kontak ("Lokasi Toko Oleh-oleh dekat Bandara Kualanamu") memuat kata kunci lokal.
+
+**Pemilik (paling berpengaruh untuk Local Pack):** `docs/SEO.md` — Google Business Profile (kategori Toko Oleh-oleh, alamat SAMA persis dengan situs, foto asli, produk), ulasan Google, Search Console + kirim sitemap, NAP konsisten di media sosial, backlink lokal, deskripsi produk unik di admin.
+
+**Acceptance Criteria:**
+- [x] `<title>`, H1, meta description beranda memuat "oleh-oleh khas Medan" + "Sumatera Utara"
+- [x] JSON-LD Store/WebSite/FAQPage valid JSON & alamat cocok dengan halaman Kontak
+- [x] FAQ tampil rapi di 375 px; teks id/en lengkap
+- [ ] Rich Results Test (search.google.com/test/rich-results) lolos di production
+- [ ] Google Business Profile terverifikasi; sitemap dikirim di Search Console
+
+---
+
+*Skill baru berikutnya ditambahkan di file ini dengan nomor lanjutan (Skill 34, dst.), memakai format yang sama: Tujuan, langkah, Acceptance Criteria.*

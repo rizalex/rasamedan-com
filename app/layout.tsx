@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   keywords: [
     "oleh-oleh Medan",
     "oleh-oleh khas Medan",
+    "toko oleh-oleh Medan",
+    "oleh-oleh Sumatera Utara",
+    "oleh-oleh Kualanamu",
     "kue Medan",
     "Bika Ambon",
     "Kacang Sihobuk",

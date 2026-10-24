@@ -13,9 +13,16 @@ import type { Metadata } from "next";
 import type { Product } from "@/lib/products";
 import { getStoreInfo } from "@/lib/store";
 import { getWaNumber } from "@/lib/whatsapp";
+import siteInfo from "@/data/site-info.json";
+import idDict from "@/locales/id.json";
+import { homeFaq } from "@/lib/home-faq";
 
-export const SITE_NAME = "Rasa Medan";
-export const SITE_TAGLINE = "Oleh-oleh Khas Medan";
+// Konstanta merek di lib/site.ts (aman untuk klien); modul ini memuat data
+// locales/site-info untuk JSON-LD, jadi sebaiknya hanya diimpor kode server.
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
+export { SITE_NAME, SITE_TAGLINE };
+/** Judul beranda — kata kunci utama pencarian lokal (Skill 33). */
+export const HOME_TITLE = "Toko Oleh-oleh Khas Medan, Sumatera Utara | Rasa Medan";
 const DEFAULT_OG_IMAGE = "/images/og-image.jpg"; // 1200×630 (JPEG: dukungan OG WebP belum merata)
 
 /** Base URL situs tanpa trailing slash. Fallback ke localhost saat dev. */
@@ -39,7 +46,8 @@ export function clampDescription(text: string, max = 160): string {
 }
 
 type PageMetaInput = {
-  title: string;
+  /** String = memakai template layout ("… | Rasa Medan"); { absolute } = apa adanya. */
+  title: string | { absolute: string };
   description: string;
   /** Path relatif halaman (untuk canonical & hreflang), mis. "/produk". */
   path: string;
@@ -65,6 +73,7 @@ export function buildMetadata({
   const url = absoluteUrl(path);
   const ogImage = absoluteUrl(image || DEFAULT_OG_IMAGE);
   const desc = clampDescription(description);
+  const plainTitle = typeof title === "string" ? title : title.absolute;
 
   return {
     title,
@@ -82,16 +91,16 @@ export function buildMetadata({
       : { index: false, follow: true },
     openGraph: {
       type,
-      title,
+      title: plainTitle,
       description: desc,
       url,
       siteName: SITE_NAME,
       locale: "id_ID",
-      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
+      images: [{ url: ogImage, width: 1200, height: 630, alt: plainTitle }],
     },
     twitter: {
       card: "summary_large_image",
-      title,
+      title: plainTitle,
       description: desc,
       images: [ogImage],
     },
@@ -222,8 +231,9 @@ function parseOpeningHours(raw: string): Record<string, unknown> | null {
 
 /**
  * Structured Data LocalBusiness (JSON-LD) — memakai info toko dari Skill 18
- * (nama, alamat, jam operasional, telepon, media sosial). Membantu Google Maps /
- * Google Business terhubung ke situs.
+ * (nama, jam operasional, telepon, media sosial) dan alamat terstruktur dari
+ * data/site-info.json (Skill 33: lokasi asli Tanjung Morawa dekat Kualanamu, bukan
+ * "Medan"). Alamat harus SAMA dengan profil Google Business (NAP konsisten).
  */
 export function localBusinessJsonLd(): Record<string, unknown> {
   const store = getStoreInfo();
@@ -236,19 +246,30 @@ export function localBusinessJsonLd(): Record<string, unknown> {
     "@type": "Store",
     "@id": `${siteUrl}/#store`,
     name: store.name,
-    description: `${SITE_NAME} — ${SITE_TAGLINE}: kue, makanan kering, dan sirup khas Medan.`,
+    description: `${SITE_NAME} — toko oleh-oleh khas Medan, Sumatera Utara: kue, makanan kering, dan sirup. Dekat ${siteInfo.contact.landmark}; kirim ke seluruh Indonesia.`,
     url: `${siteUrl}/`,
     image: absoluteUrl(DEFAULT_OG_IMAGE),
+    logo: absoluteUrl("/images/rasa-medan-mark.svg"),
     address: {
       "@type": "PostalAddress",
-      streetAddress: store.address,
-      addressLocality: "Medan",
-      addressRegion: "Sumatera Utara",
+      streetAddress: siteInfo.contact.address,
+      addressLocality: siteInfo.contact.locality,
+      addressRegion: siteInfo.contact.region,
+      postalCode: siteInfo.contact.postalCode,
       addressCountry: "ID",
     },
+    areaServed: [
+      { "@type": "City", name: "Medan" },
+      { "@type": "AdministrativeArea", name: "Sumatera Utara" },
+      { "@type": "Country", name: "Indonesia" },
+    ],
+    keywords: "oleh-oleh khas Medan, toko oleh-oleh Medan, oleh-oleh Kualanamu, oleh-oleh Sumatera Utara",
     priceRange: "Rp",
-    servesCuisine: "Oleh-oleh Khas Medan",
+    paymentAccepted: "QRIS, Transfer Bank",
+    currenciesAccepted: "IDR",
   };
+  if (store.mapsLinkUrl) data.hasMap = store.mapsLinkUrl;
+  if (siteInfo.contact.email) data.email = siteInfo.contact.email;
   if (wa) data.telephone = `+${wa}`;
   if (sameAs.length > 0) data.sameAs = sameAs;
 
@@ -258,6 +279,44 @@ export function localBusinessJsonLd(): Record<string, unknown> {
   if (spec.length > 0) data.openingHoursSpecification = spec;
 
   return data;
+}
+
+/** WebSite (JSON-LD) — nama situs untuk tampilan hasil Google (Skill 33). */
+export function websiteJsonLd(): Record<string, unknown> {
+  const siteUrl = getSiteUrl();
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${siteUrl}/#website`,
+    name: SITE_NAME,
+    alternateName: ["Rasa Medan Oleh-oleh", "Toko Oleh-oleh Rasa Medan"],
+    url: `${siteUrl}/`,
+    inLanguage: "id-ID",
+    publisher: { "@id": `${siteUrl}/#store` },
+  };
+}
+
+/**
+ * FAQPage (JSON-LD) — isi sama dengan FAQ yang tampil di beranda dalam bahasa default
+ * `id`. Disengaja hanya id: server & crawler selalu merender id (pilihan en dibaca
+ * dari localStorage setelah mount, hanya di browser pengguna).
+ */
+export function faqJsonLd(): Record<string, unknown> {
+  const t = (key: string): string => {
+    const v = key
+      .split(".")
+      .reduce<unknown>((acc, part) => (acc as Record<string, unknown>)?.[part], idDict);
+    return typeof v === "string" ? v : key;
+  };
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: homeFaq(t).map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  };
 }
 
 /** Structured Data BreadcrumbList (JSON-LD) — navigasi Beranda > … > Halaman. */

@@ -6,9 +6,9 @@ import JsonLd from "@/components/seo/JsonLd";
 import { buildMetadata, localBusinessJsonLd } from "@/lib/seo";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Kontak & Lokasi Toko",
+  title: "Lokasi Toko Oleh-oleh dekat Bandara Kualanamu",
   description:
-    "Hubungi Rasa Medan via WhatsApp untuk pemesanan & pertanyaan. Lihat alamat toko, jam operasional, dan info pengambilan sendiri (pickup) di Medan.",
+    "Alamat toko oleh-oleh Rasa Medan di Jl. Bandara Kualanamu, Tanjung Morawa, Sumatera Utara. Lihat peta, jam buka, pickup, dan pesan via WhatsApp.",
   path: "/kontak",
 });
 

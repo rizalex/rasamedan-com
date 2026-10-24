@@ -5,9 +5,9 @@ import AboutView from "@/components/support/AboutView";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Tentang Kami",
+  title: "Tentang Kami - Toko Oleh-oleh Khas Medan",
   description:
-    "Rasa Medan adalah usaha keluarga penjual oleh-oleh khas Medan — kue, makanan kering, dan sirup — dibuat segar dengan resep turun-temurun.",
+    "Rasa Medan adalah usaha keluarga penjual oleh-oleh khas Medan, Sumatera Utara — kue, makanan kering, dan sirup — dibuat segar dengan resep turun-temurun.",
   path: "/tentang",
 });
 

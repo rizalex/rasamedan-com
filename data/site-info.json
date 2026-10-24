@@ -1,5 +1,5 @@
 {
-  "_comment": "Konten halaman Tentang & Kontak. Edit file ini untuk mengubah isi halaman tanpa menyentuh kode. Nomor WhatsApp diambil dari .env — NEXT_PUBLIC_WA_NUMBER (utama/pemesanan) & NEXT_PUBLIC_WA_NUMBER_ALT (layanan pelanggan) — bukan dari sini.",
+  "_comment": "Konten halaman Tentang & Kontak. Edit file ini untuk mengubah isi halaman tanpa menyentuh kode. Nomor WhatsApp diambil dari .env — NEXT_PUBLIC_WA_NUMBER (utama/pemesanan) & NEXT_PUBLIC_WA_NUMBER_ALT (layanan pelanggan) — bukan dari sini. Field contact.locality/region/postalCode/landmark dipakai Structured Data (SEO, Skill 33) & FAQ beranda.",
   "storeName": "Rasa Medan",
   "about": {
     "tagline": "Oleh-oleh khas Medan, dibuat dengan hati.",
@@ -11,17 +11,27 @@
   },
   "contact": {
     "address": "Jl. Bandara Kuala Namu - Tj, Morawa (Sebelum Gate Bandara) Sumatera Utara 20552",
+    "locality": "Tanjung Morawa, Deli Serdang",
+    "region": "Sumatera Utara",
+    "postalCode": "20552",
+    "landmark": "Bandara Internasional Kualanamu",
     "pickupPoint": "Pengambilan sendiri dapat dilakukan di alamat toko pada jam operasional.",
-    "email": "halo@rasamedan",
+    "email": "halo@rasamedan.com",
     "hours": [
-      { "days": "Kamis – Selasa", "time": "08.00 – 17.00 WIB" },
-      { "days": "Rabu", "time": "Tutup" }
+      {
+        "days": "Kamis – Selasa",
+        "time": "08.00 – 17.00 WIB"
+      },
+      {
+        "days": "Rabu",
+        "time": "Tutup"
+      }
     ]
   },
   "shipping": {
     "paragraphs": [
       "Pesanan dikemas dan siap dikirim H+1 setelah pembayaran diverifikasi.",
-      "Ongkos kirim dihitung oleh pemilik sesuai alamat tujuan dan diinformasikan lewat WhatsApp sebelum pembayaran.",
+      "Pembayaran dilakukan via WhatsApp dengan QRIS atau Transfer Bank, melampirkan bukti pembayaran sebelum pengiriman sesuai alamat tujuan.",
       "Tersedia opsi ambil sendiri (pickup) tanpa biaya kirim di alamat toko."
     ]
   }

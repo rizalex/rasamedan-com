@@ -5,15 +5,22 @@ import HomeView from "@/components/home/HomeView";
 import JsonLd from "@/components/seo/JsonLd";
 import { getFeaturedProducts } from "@/lib/products";
 import { getAllCategories } from "@/lib/categories";
-import { buildMetadata, localBusinessJsonLd, SITE_TAGLINE } from "@/lib/seo";
+import {
+  buildMetadata,
+  faqJsonLd,
+  HOME_TITLE,
+  localBusinessJsonLd,
+  websiteJsonLd,
+} from "@/lib/seo";
 
 // Beranda mengambil produk pilihan dari D1 saat request (butuh DB runtime).
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = buildMetadata({
-  title: `Rasa Medan - ${SITE_TAGLINE}`,
+  // Judul absolut (bukan template layout) — kata kunci utama pencarian lokal.
+  title: { absolute: HOME_TITLE },
   description:
-    "Belanja oleh-oleh khas Medan: Bika Ambon, Kacang Sihobuk, Sirup Markisa, dan camilan lainnya. Pesan tanpa akun, konfirmasi cepat via WhatsApp, pengiriman next-day.",
+    "Toko oleh-oleh khas Medan, Sumatera Utara: Bika Ambon, Kue Gulung, Kacang Sihobuk, Sirup Markisa. Dekat Bandara Kualanamu, kirim ke seluruh Indonesia.",
   path: "/",
 });
 
@@ -26,6 +33,8 @@ export default async function HomePage() {
   return (
     <>
       <JsonLd data={localBusinessJsonLd()} />
+      <JsonLd data={websiteJsonLd()} />
+      <JsonLd data={faqJsonLd()} />
       <Header />
       <HomeView featured={featured} categories={categories} />
       <Footer />
