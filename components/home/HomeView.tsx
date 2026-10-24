@@ -13,6 +13,7 @@ import {
   IconBottle,
 } from "@/components/ui/icons";
 import { buildWaLink } from "@/lib/whatsapp";
+import { homeFaq, homeSeoParagraphs } from "@/lib/home-faq";
 import type { Product } from "@/lib/products";
 import type { Category } from "@/lib/categories";
 import styles from "./HomeView.module.css";
@@ -48,12 +49,14 @@ export default function HomeView({
       <section className={styles.hero}>
         <div className={styles.heroOrnament} aria-hidden />
         <div className={styles.heroInner}>
-          <p className={styles.heroEyebrow}>{t("home.heroEyebrow")}</p>
-          <h1 className={styles.heroTitle}>
+          {/* H1 = kata kunci utama pencarian (Skill 33); slogan besar tetap tampil
+              sebagai teks dekoratif di bawahnya. */}
+          <h1 className={styles.heroEyebrow}>{t("home.heroEyebrow")}</h1>
+          <p className={styles.heroTitle}>
             {t("home.heroTitle")}
             <br />
             <span className={styles.heroAccent}>{t("home.heroTitleAccent")}</span>
-          </h1>
+          </p>
           <p className={styles.heroSubtitle}>{t("home.heroSubtitle")}</p>
           <div className={styles.heroCtas}>
             <Link href="/produk" className={styles.heroCtaPrimary}>
@@ -119,8 +122,31 @@ export default function HomeView({
           </div>
         </section>
 
+        {/* Konten SEO: teks yang bisa diindeks tentang toko & oleh-oleh Medan */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>{t("home.seoTitle")}</h2>
+          <div className={styles.seoText}>
+            {homeSeoParagraphs(t).map((p, i) => (
+              <p key={i}>{p}</p>
+            ))}
+          </div>
+        </section>
+
         {/* Lokasi Toko + peta */}
         <StoreLocation />
+
+        {/* FAQ — isi sama dengan FAQPage JSON-LD di app/page.tsx */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>{t("home.faqTitle")}</h2>
+          <div className={styles.faqList}>
+            {homeFaq(t).map((f, i) => (
+              <details key={i} className={styles.faqItem}>
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
       </main>
     </>
   );

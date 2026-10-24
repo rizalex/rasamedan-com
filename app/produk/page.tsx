@@ -23,16 +23,16 @@ export async function generateMetadata({
   if (active) {
     // Kategori valid: canonical menunjuk URL kategori itu sendiri.
     return buildMetadata({
-      title: `${active.name} Khas Medan`,
-      description: `Koleksi ${active.name.toLowerCase()} khas Medan dari Rasa Medan. Pilih produk favorit, pesan tanpa akun, konfirmasi via WhatsApp.`,
+      title: `${active.name} Khas Medan - Oleh-oleh Sumatera Utara`,
+      description: `Koleksi ${active.name.toLowerCase()} khas Medan dari toko oleh-oleh Rasa Medan, Sumatera Utara. Pesan tanpa akun, kirim ke seluruh Indonesia, konfirmasi via WhatsApp.`,
       path: `/produk?category=${active.slug}`,
     });
   }
 
   return buildMetadata({
-    title: "Katalog Oleh-oleh Khas Medan",
+    title: "Katalog Oleh-oleh Khas Medan - Kue, Camilan & Sirup",
     description:
-      "Jelajahi semua oleh-oleh khas Medan: kue, makanan kering, dan sirup. Cari produk, pilih varian, dan pesan mudah lewat WhatsApp.",
+      "Belanja oleh-oleh khas Medan, Sumatera Utara: Bika Ambon, kue, makanan kering, dan sirup. Cari produk, pilih varian, kirim ke seluruh Indonesia via WhatsApp.",
     // Hasil pencarian (?q=) tidak diindeks & canonical dikembalikan ke katalog bersih.
     path: "/produk",
     index: !isSearch,

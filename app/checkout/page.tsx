@@ -4,6 +4,7 @@ import Footer from "@/components/layout/Footer";
 import CheckoutView from "@/components/checkout/CheckoutView";
 import { buildMetadata } from "@/lib/seo";
 import { getCaptchaSiteKey } from "@/lib/turnstile";
+import { getShippingConfig } from "@/lib/shipping";
 
 // Halaman transaksional: noindex.
 export const metadata: Metadata = buildMetadata({
@@ -21,7 +22,7 @@ export default function CheckoutPage() {
   return (
     <>
       <Header />
-      <CheckoutView captchaSiteKey={getCaptchaSiteKey()} />
+      <CheckoutView captchaSiteKey={getCaptchaSiteKey()} shippingEnabled={getShippingConfig().enabled} />
       <Footer />
     </>
   );

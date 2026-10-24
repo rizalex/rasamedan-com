@@ -34,7 +34,12 @@
 		// Site key Turnstile (publik). Diisi di sini, bukan di dashboard: `wrangler
 		// deploy` menimpa vars dashboard. Kosong = semua form captcha ditolak di
 		// production (fail-closed) — WAJIB diisi sebelum deploy.
-		"TURNSTILE_SITE_KEY": "0x4AAAAAAD5HvyDRwKtR2-nQ"
+		"TURNSTILE_SITE_KEY": "0x4AAAAAAD5HvyDRwKtR2-nQ",
+		// Estimasi ongkir (Skill 31): kecamatan asal toko di api.co.id (Kec. Beringin,
+		// Deli Serdang) & batas cek tarif per hari (Rp 5/cek). Fitur aktif hanya bila
+		// secret API_CO_ID_KEY juga terpasang (`wrangler secret put API_CO_ID_KEY`).
+		"SHIPPING_ORIGIN_DISTRICT_CODE": "120733",
+		"SHIPPING_RATES_DAILY_CAP": "100"
 	},
 	// Pengaman: wrangler menjalankan ini sebelum bundling pada SETIAP `deploy`,
 	// `versions upload`, dan `dev` — termasuk bila dipanggil langsung tanpa
@@ -91,7 +96,9 @@
 				"TRUST_CF_CONNECTING_IP": "1",
 				// Widget Turnstile yang sama boleh dipakai: tambahkan hostname
 				// rasa-medan-staging.<subdomain>.workers.dev di dashboard Turnstile.
-				"TURNSTILE_SITE_KEY": "0x4AAAAAAD5HvyDRwKtR2-nQ"
+				"TURNSTILE_SITE_KEY": "0x4AAAAAAD5HvyDRwKtR2-nQ",
+				"SHIPPING_ORIGIN_DISTRICT_CODE": "120733",
+				"SHIPPING_RATES_DAILY_CAP": "100"
 			},
 			// D1 staging (`npx wrangler d1 create rasamedan-staging`).
 			"d1_databases": [

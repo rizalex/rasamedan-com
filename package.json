@@ -29,18 +29,17 @@
     "uploads:r2": "node scripts/upload-to-r2.mjs"
   },
   "dependencies": {
-    "@opennextjs/cloudflare": "^1.20.10",
-    "next": "^15.5.27",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "@opennextjs/cloudflare": "^1.20.13",
+    "next": "^16.4.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^15.5.27",
+    "eslint-config-next": "^16.4.2",
     "typescript": "^5.7.3",
     "wrangler": "^4.150.0"
   }

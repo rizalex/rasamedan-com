@@ -50,3 +50,12 @@ Thumbs.db
 !/migrations/*.sql
 !/db/seed/*.sql
 !/docs/legacy/*.sql
+
+# Hasil uji api.co.id mentah (Skill 31.0) — sanitasi dulu sebelum commit
+/docs/api-co-id-probe/
+/docs/loc-*.json
+/docs/rates-*.json
+/docs/couriers.json
+
+# Dibuat ulang otomatis oleh `next dev` (Next.js 16); panduan agen proyek ada di CLAUDE.md
+/AGENTS.md

@@ -42,6 +42,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
+      // Preferensi tersimpan hanya terbaca setelah mount (hindari hydration mismatch).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved && isLocale(saved)) setLocaleState(saved);
     } catch {
       /* localStorage tidak tersedia — abaikan */

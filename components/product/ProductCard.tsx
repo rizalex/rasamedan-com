@@ -6,7 +6,7 @@ import type { Product } from "@/lib/products";
 import { formatRupiah } from "@/lib/format";
 import { priceRange } from "@/lib/pricing";
 import { useI18n } from "@/components/i18n/I18nProvider";
-import { SITE_NAME } from "@/lib/seo";
+import { SITE_NAME } from "@/lib/site";
 import { IconCake, IconSnack, IconBottle } from "@/components/ui/icons";
 import StockBadge from "./StockBadge";
 import styles from "./ProductCard.module.css";

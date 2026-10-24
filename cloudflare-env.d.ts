@@ -10,6 +10,9 @@ interface __BaseEnv_CloudflareEnv {
 	TURNSTILE_SECRET_KEY: string;
 	ALLOW_TEST_CAPTCHA: string;
 	GOOGLE_SITE_VERIFICATION: string;
+	API_CO_ID_KEY: string;
+	SHIPPING_ORIGIN_DISTRICT_CODE: string;
+	SHIPPING_RATES_DAILY_CAP: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
@@ -22,7 +25,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "TRUST_CF_CONNECTING_IP" | "ADMIN_SESSION_SECRET" | "TURNSTILE_SITE_KEY" | "TURNSTILE_SECRET_KEY" | "ALLOW_TEST_CAPTCHA" | "GOOGLE_SITE_VERIFICATION">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "TRUST_CF_CONNECTING_IP" | "ADMIN_SESSION_SECRET" | "TURNSTILE_SITE_KEY" | "TURNSTILE_SECRET_KEY" | "ALLOW_TEST_CAPTCHA" | "GOOGLE_SITE_VERIFICATION" | "API_CO_ID_KEY" | "SHIPPING_ORIGIN_DISTRICT_CODE" | "SHIPPING_RATES_DAILY_CAP">> {}
 }
 declare module "*.txt" {
 	const value: string;

@@ -64,6 +64,16 @@ try {
     if ("ALLOW_TEST_CAPTCHA" in v) {
       problems.push("ALLOW_TEST_CAPTCHA tidak boleh ada di wrangler.jsonc `vars` (mematikan captcha production)");
     }
+    // Estimasi ongkir (Skill 31): format kode kecamatan api.co.id (6 digit) & batas harian.
+    if ("SHIPPING_ORIGIN_DISTRICT_CODE" in v && !/^\d{6}$/.test(String(v.SHIPPING_ORIGIN_DISTRICT_CODE))) {
+      problems.push("SHIPPING_ORIGIN_DISTRICT_CODE harus kode kecamatan api.co.id 6 digit (mis. 120733)");
+    }
+    if ("SHIPPING_RATES_DAILY_CAP" in v) {
+      const cap = Number(v.SHIPPING_RATES_DAILY_CAP);
+      if (!Number.isInteger(cap) || cap < 1 || cap > 5000) {
+        problems.push("SHIPPING_RATES_DAILY_CAP harus bilangan bulat 1–5000 (Rp 5 per cek tarif)");
+      }
+    }
     // `vars` di-commit ke repo: rahasia di sini = rahasia publik.
     for (const key of Object.keys(v)) {
       if ((SECRET_LIKE.test(key) || key.startsWith("DB_")) && !PUBLIC_KEY_ALLOWLIST.has(key)) {

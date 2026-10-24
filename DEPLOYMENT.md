@@ -18,8 +18,8 @@ diarsip di [`docs/legacy/DEPLOYMENT-cpanel.md`](docs/legacy/DEPLOYMENT-cpanel.md
 | Jenis | Contoh | Lokasi | Kapan dibaca |
 |---|---|---|---|
 | Publik, di-inline ke JS | `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_WA_NUMBER`, info toko | `.env` (deploy dari komputer) **atau** Build variables Workers Builds | **saat build** — ubah nilai = build & deploy ulang |
-| Non-rahasia runtime | `TURNSTILE_SITE_KEY`, `TRUST_CF_CONNECTING_IP` | `vars` di `wrangler.jsonc` (di-commit) | saat request |
-| Rahasia runtime | `ADMIN_SESSION_SECRET`, `TURNSTILE_SECRET_KEY` | `npx wrangler secret put <NAMA>` | saat request |
+| Non-rahasia runtime | `TURNSTILE_SITE_KEY`, `TRUST_CF_CONNECTING_IP`, `SHIPPING_ORIGIN_DISTRICT_CODE`, `SHIPPING_RATES_DAILY_CAP` | `vars` di `wrangler.jsonc` (di-commit) | saat request |
+| Rahasia runtime | `ADMIN_SESSION_SECRET`, `TURNSTILE_SECRET_KEY`, `API_CO_ID_KEY` (opsional, Skill 31) | `npx wrangler secret put <NAMA>` | saat request |
 | Binding | D1 `DB`, R2 `UPLOADS` | `wrangler.jsonc` | saat request |
 | Lokal saja | rahasia untuk `npm run preview` | `.dev.vars` (tidak di-commit) | preview lokal |
 
@@ -147,6 +147,7 @@ Cek sebelum deploy (opsional): `npm run cf:dryrun` (ukuran bundle; batas Free 3 
 - [ ] Beranda, katalog + filter, detail produk, toggle bahasa, keranjang
 - [ ] Checkout (widget Turnstile muncul) → Order ID → tautan WhatsApp benar; coba juga keranjang besar (±50 baris)
 - [ ] Cek pesanan dengan nomor HP (+ Order ID)
+- [ ] Estimasi ongkir (bila `API_CO_ID_KEY` terpasang, §10a): pilih Provinsi → Kota → Kecamatan, "Lihat ongkir" menampilkan kurir + harga kelipatan Rp 1.000, pilih kurir → ringkasan menampilkan estimasi total, pesan WhatsApp berisi baris "Estimasi ongkir". Tanpa key: checkout memakai input teks kecamatan/kota dan WA berisi "Ongkir: dikonfirmasi via WhatsApp"
 - [ ] Login admin, ubah status pesanan, pencarian pesanan, CRUD produk + **upload foto** (tidak ada error 411), kategori
 - [ ] Ganti password admin di Pengaturan (± 10 ms CPU — bila muncul error "Exceeded CPU", lihat SKILLS 26a)
 - [ ] `curl -I <url>/` menampilkan CSP, nosniff, X-Frame-Options, Referrer-Policy; console browser tanpa pelanggaran CSP
@@ -155,7 +156,7 @@ Cek sebelum deploy (opsional): `npm run cf:dryrun` (ukuran bundle; batas Free 3 
 ## 8. Proteksi kuota (sekali, dashboard)
 
 - **WAF → Rate limiting rules** (1 aturan gratis): path `/api/admin/auth`, `/api/orders`,
-  `/api/orders/lookup`, mis. 20 request / 10 detik per IP → Block. Menahan banjir request
+  `/api/orders/lookup`, `/api/shipping/*`, mis. 20 request / 10 detik per IP → Block. Menahan banjir request
   sebelum menyentuh Worker/D1 (rate limit aplikasi tetap aktif di D1).
 - **Notifications**: aktifkan peringatan penggunaan Workers & D1 mendekati batas Free
   (100 rb request/hari; D1 5 jt baca & 100 rb tulis/hari).
@@ -257,6 +258,28 @@ Lalu:
 - **Migrasi skema baru:** tambah `migrations/NNNN_*.sql` → uji `npm run db:migrate` lokal →
   `npm run db:migrate:remote` **sebelum** deploy kode yang membutuhkannya.
 - **Checklist pre-deploy lengkap:** SKILLS.md 21.3 (isi setiap deploy).
+
+### 10a. Estimasi ongkir api.co.id (Skill 31)
+
+- **Aktif bila** secret `API_CO_ID_KEY` terpasang **dan** `vars.SHIPPING_ORIGIN_DISTRICT_CODE`
+  berisi kode kecamatan 6 digit (sekarang `120733` = Kec. Beringin, Deli Serdang). Tanpa key,
+  checkout otomatis kembali ke input teks kecamatan/kota — tidak ada yang rusak.
+- **Urutan rilis (staging dulu):**
+  1. `npm run db:migrate:staging` (migrasi `0004_shipping_estimate.sql`).
+  2. `npx wrangler secret put API_CO_ID_KEY --env staging` → push `dev` → uji §7 di staging.
+  3. `npm run db:migrate:remote` → `npx wrangler secret put API_CO_ID_KEY` → merge ke `main`.
+- **Biaya:** Rp 5 per cek tarif yang **tidak** ada di cache (cache 12 jam per rute + berat).
+  Batas: 5 cek/jam per IP, `SHIPPING_RATES_DAILY_CAP` (default 100) cek/hari total.
+  Saldo api.co.id = anggaran keras: isi secukupnya, cek saldo berkala di dashboard api.co.id.
+- **Saldo habis / key ditolak / kuota plan habis:** aplikasi berhenti memanggil api.co.id
+  selama 60 menit (circuit breaker) dan checkout jatuh ke "ongkir dikonfirmasi via
+  WhatsApp". Isi saldo / perbaiki key — pulih otomatis setelah jendela 60 menit.
+- **Kill switch tanpa deploy:** `npx wrangler secret delete API_CO_ID_KEY` (tambahkan
+  `--env staging` untuk staging). Pasang lagi dengan `secret put`.
+- **Rotasi key:** buat key baru di dashboard api.co.id → `secret put` (production & staging)
+  → nonaktifkan key lama.
+- **Ganti asal kirim:** ubah `SHIPPING_ORIGIN_DISTRICT_CODE` di kedua blok `vars`
+  `wrangler.jsonc` (kode dari `GET /courier/v1/locations/districts?city=<kode kota>`) lalu deploy.
 
 ---
 

@@ -12,7 +12,7 @@
       rgba(20, 67, 46, 0.42) 60%,
       rgba(15, 51, 35, 0.12) 100%
     ),
-    url("/images/hero-medan.webp") center right / cover no-repeat,
+    url("/images/hero-medan-v2.webp") center right / cover no-repeat,
     var(--color-primary-dark);
   color: var(--color-bg);
   margin: 16px 20px 0;
@@ -40,6 +40,8 @@
 .heroEyebrow {
   color: var(--color-accent);
   font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   margin: 0 0 12px;
@@ -181,7 +183,7 @@
         rgba(20, 67, 46, 0.82) 55%,
         rgba(15, 51, 35, 0.6) 100%
       ),
-      url("/images/hero-medan.webp") center bottom / cover no-repeat,
+      url("/images/hero-medan-v2.webp") center bottom / cover no-repeat,
       var(--color-primary-dark);
     min-height: 360px;
   }
@@ -202,4 +204,44 @@
   .categoryGrid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Konten SEO & FAQ (Skill 33) */
+.seoText {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text);
+  max-width: 760px;
+}
+.seoText p {
+  margin: 0;
+}
+.faqList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.faqItem {
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0 14px;
+}
+.faqItem summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 12px 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.faqItem p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-muted);
 }

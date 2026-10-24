@@ -19,5 +19,10 @@ TURNSTILE_SITE_KEY=
 TURNSTILE_SECRET_KEY=
 ALLOW_TEST_CAPTCHA=
 
+# Estimasi ongkir api.co.id (Skill 31). Kosong = fitur mati (checkout memakai
+# input teks kecamatan/kota). Untuk uji lokal pakai Test Key (tarif mock, gratis).
+# Production: npx wrangler secret put API_CO_ID_KEY
+API_CO_ID_KEY=
+
 # Opsional: meta verifikasi Google Search Console.
 GOOGLE_SITE_VERIFICATION=

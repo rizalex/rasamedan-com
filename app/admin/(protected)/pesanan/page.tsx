@@ -1,4 +1,6 @@
 import { getAdminOrders } from "@/lib/orders-db";
+import { getDisabledCourierCodes } from "@/lib/courier-settings";
+import { COURIERS, findCourierByApiCode } from "@/lib/couriers.mjs";
 import { formatRupiah, formatDateTime } from "@/lib/format";
 import OrderStatusSelect from "@/components/admin/OrderStatusSelect";
 import ShipmentForm from "@/components/admin/ShipmentForm";
@@ -27,15 +29,20 @@ export default async function AdminOrdersPage({
   // Parameter berulang (?q=a&q=b) menjadi array — ambil string saja.
   const status = typeof sp.status === "string" ? sp.status : "";
   const q = typeof sp.q === "string" ? sp.q : "";
-  const orders = await getAdminOrders({ status, q });
+  const [orders, disabled] = await Promise.all([
+    getAdminOrders({ status, q }),
+    getDisabledCourierCodes(),
+  ]);
+  const enabledCodes = COURIERS.filter((c) => !disabled.has(c.code)).map((c) => c.code);
 
   return (
     <div className={styles.container}>
       <h1 className={styles.pageTitle}>Pesanan</h1>
       <p className={styles.pageDesc}>
         Ubah status pesanan — perubahan langsung terlihat pelanggan di halaman
-        &quot;Cek Pesanan&quot;. Untuk pesanan kurir, isi kurir &amp; nomor resi agar
-        pelanggan bisa melacak paketnya sendiri.
+        &quot;Cek Pesanan&quot;. Untuk pesanan kurir, isi kurir dikirim &amp; nomor resi agar
+        pelanggan bisa melacak paketnya sendiri. Kurir terisi otomatis dari pilihan
+        ongkir pelanggan — ganti bila kurir yang dipakai berbeda.
       </p>
 
       {/* Filter */}
@@ -113,6 +120,13 @@ export default async function AdminOrdersPage({
                     {o.total_estimate != null
                       ? formatRupiah(o.total_estimate)
                       : "-"}
+                    {o.fulfillment_method === "kurir" && (
+                      <div className={styles.hint}>
+                        {o.shipping_estimate != null
+                          ? `+ ongkir ±${formatRupiah(o.shipping_estimate)} · ${o.shipping_service ?? "-"}${o.shipping_etd ? ` (${o.shipping_etd} hari)` : ""}`
+                          : "Ongkir: konfirmasi via WA"}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <OrderStatusSelect
@@ -125,6 +139,8 @@ export default async function AdminOrdersPage({
                         orderId={o.id}
                         courierCode={o.courier_code}
                         waybill={o.waybill}
+                        suggestedCourier={findCourierByApiCode(o.shipping_courier)?.code ?? null}
+                        enabledCodes={enabledCodes}
                       />
                     )}
                   </td>

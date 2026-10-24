@@ -87,6 +87,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
+        // Hidrasi dari localStorage hanya bisa setelah mount (render awal = server).
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setItems(sanitizeStored(JSON.parse(raw)));
       }
     } catch {

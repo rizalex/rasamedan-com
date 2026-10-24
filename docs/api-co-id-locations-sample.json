@@ -1,0 +1,39 @@
+{
+  "_note": "21 Okt 2026, Live Key. cities?province=12 (dipotong 3) dan districts?city=1271 (dipotong 3).",
+  "cities": {
+    "is_success": true,
+    "message": "Success",
+    "data": [
+      {
+        "code": "1209",
+        "name": "Asahan"
+      },
+      {
+        "code": "1219",
+        "name": "Batu Bara"
+      },
+      {
+        "code": "1211",
+        "name": "Dairi"
+      }
+    ]
+  },
+  "districts": {
+    "is_success": true,
+    "message": "Success",
+    "data": [
+      {
+        "code": "127109",
+        "name": "Medan Amplas"
+      },
+      {
+        "code": "127110",
+        "name": "Medan Area"
+      },
+      {
+        "code": "127105",
+        "name": "Medan Barat"
+      }
+    ]
+  }
+}

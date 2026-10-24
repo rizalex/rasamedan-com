@@ -8,6 +8,7 @@ import {
   IconBox,
   IconTag,
   IconGear,
+  IconTruck,
 } from "@/components/ui/icons";
 import styles from "./admin.module.css";
 
@@ -16,6 +17,7 @@ const LINKS = [
   { href: "/admin/pesanan", label: "Pesanan", Icon: IconClipboard },
   { href: "/admin/produk", label: "Produk", Icon: IconBox },
   { href: "/admin/kategori", label: "Kategori", Icon: IconTag },
+  { href: "/admin/kurir", label: "Kurir", Icon: IconTruck },
   { href: "/admin/pengaturan", label: "Pengaturan", Icon: IconGear },
 ];
 
